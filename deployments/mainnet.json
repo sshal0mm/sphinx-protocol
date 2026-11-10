@@ -1,0 +1,22 @@
+{
+  "network": "mainnet",
+  "contract": "escrow.sphinxescrow.near",
+  "owner": "sphinxescrow.near",
+  "code_sha256": "bd35ad59951a2d2e38d653adef29fd97a59aa341924d992a8133feb97020efe6",
+  "deploy_tx": "4jpxcd9T5QNZrDL23nLqPzx1LdnM56qTLiHcxQnVxnai",
+  "verifier": "sphinxescrow.near",
+  "fee_bps": 500,
+  "allow_dev_keys": false,
+  "previous_graders": [],
+  "grader": {
+    "caller": "relayer.sphinxescrow.near",
+    "url": "https://sphinx.sshal0mm.dev/grader/60ba775f4163829baadc931de28c61493f6ed7dba352b34d2c18c10a68d17ff8.wasm",
+    "wasm_sha256": "60ba775f4163829baadc931de28c61493f6ed7dba352b34d2c18c10a68d17ff8",
+    "public_key": "2e92eeadd4d5b3f66038594493f261c5d9b9751da6417ae5de8fb14f8332fae7",
+    "box_public_key": "cf626a58126813761a63b12c694e7b6d1d8c96d7a6f32673832a9c29561df03e",
+    "attestation": "https://api.outlayer.ai/attestations/by-tx/FuftJoid1LeD7i4KQp7CdZyeBUphWdPSXKaGhweG5zQ2",
+    "identity_tx": "FuftJoid1LeD7i4KQp7CdZyeBUphWdPSXKaGhweG5zQ2",
+    "registration_tx": "4GogZETrb4XLpcvWaV9q3qdtzvo11WmqaYpPz111HzBH",
+    "source_tag": "grader-60ba775f"
+  }
+}
