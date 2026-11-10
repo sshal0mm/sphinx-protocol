@@ -24,7 +24,11 @@ use crate::plan::Work;
 /// Everything a pass needs.
 pub struct Relayer {
     pub escrow: Escrow,
+    /// The current grader build, which new jobs are committed to.
     pub grader: Grader,
+    /// Earlier builds, for jobs committed before a release: each job is graded
+    /// by the build its key was frozen with, or not at all.
+    pub previous_graders: Vec<Grader>,
     pub account: AccountId,
     pub signer: Arc<Signer>,
     /// Where submission code is read from (see [`CodeSource`]).
@@ -265,34 +269,58 @@ impl Relayer {
         .await
     }
 
-    /// Whether the buyer has stored this job's hidden suite for the current grader
+    /// The grader build this job's key was frozen with, if this relayer runs it.
+    fn grader_for(&self, job: &Job) -> Result<&Grader, SphinxError> {
+        let wanted = job
+            .commit
+            .as_ref()
+            .map(|c| c.grader.wasm_sha256.to_string())
+            .ok_or_else(|| invariant("job has no committed grader"))?;
+        std::iter::once(&self.grader)
+            .chain(&self.previous_graders)
+            .find(|g| g.wasm_sha256.eq_ignore_ascii_case(&wanted))
+            .ok_or_else(|| {
+                SphinxError::new(
+                    Code::GraderHiddenInputMissing,
+                    format!(
+                        "job {} is committed to grader build {wanted}, which this relayer does not run; add it to SPHINX_GRADER_PREVIOUS",
+                        job.id
+                    ),
+                )
+                .retry(sphinx_protocol::Retry::Wait)
+                .ctx("job_id", &job.id)
+            })
+    }
+
+    /// Whether the buyer has stored this job's hidden suite for the job's grader
     /// build. Checked before paying for an enclave run, which would otherwise
     /// fail closed and waste the run fee.
-    async fn suite_is_stored(&self, job: &Job) -> Result<bool, SphinxError> {
+    async fn suite_is_stored(&self, job: &Job, grader: &Grader) -> Result<bool, SphinxError> {
         let owner: AccountId =
             job.buyer.parse().map_err(|_| invariant("job buyer is not an account id"))?;
         let keystore = Keystore {
-            contract: self.grader.outlayer.clone(),
-            ..Keystore::for_account(self.grader.outlayer.as_str())
+            contract: grader.outlayer.clone(),
+            ..Keystore::for_account(grader.outlayer.as_str())
         };
         keystore
             .is_stored(
                 self.escrow.network(),
                 &owner,
                 &profile_for_job(job.id_u64()),
-                &self.grader.wasm_sha256,
+                &grader.wasm_sha256,
             )
             .await
     }
 
     /// Runs the grader with the job's hidden suite and returns a successful response.
     async fn run_grader(&self, job: &Job, request: &Value) -> Result<Value, SphinxError> {
-        if !self.suite_is_stored(job).await? {
+        let grader = self.grader_for(job)?;
+        if !self.suite_is_stored(job, grader).await? {
             return Err(SphinxError::new(
                 Code::GraderHiddenInputMissing,
                 format!(
                     "job {} has no hidden suite stored for grader {}; waiting for the buyer to run `sphinx suite store`",
-                    job.id, self.grader.wasm_sha256
+                    job.id, grader.wasm_sha256
                 ),
             )
             .retry(sphinx_protocol::Retry::Wait)
@@ -300,8 +328,7 @@ impl Relayer {
         }
         let secrets =
             SecretsRef { profile: profile_for_job(job.id_u64()), account_id: job.buyer.clone() };
-        let response = self
-            .grader
+        let response = grader
             .run(
                 self.escrow.network(),
                 self.account.clone(),

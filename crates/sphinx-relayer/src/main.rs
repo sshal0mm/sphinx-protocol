@@ -48,6 +48,19 @@ fn build() -> Result<Relayer, String> {
         .map_err(|_| "SPHINX_RELAYER_KEY is not an ed25519:... key".to_owned())?;
     let signer = Signer::from_secret_key(key).map_err(|e| format!("SPHINX_RELAYER_KEY: {e}"))?;
     let outlayer = sphinx_near::hidden_suite::Keystore::for_account(contract.as_str()).contract;
+    // Earlier grader builds, for jobs committed before the current release:
+    // SPHINX_GRADER_PREVIOUS=<sha256>=<url>,<sha256>=<url>
+    let previous_graders = std::env::var("SPHINX_GRADER_PREVIOUS")
+        .unwrap_or_default()
+        .split(',')
+        .filter_map(|pair| pair.trim().split_once('='))
+        .map(|(sha, url)| Grader {
+            outlayer: outlayer.clone(),
+            wasm_url: url.trim().to_owned(),
+            wasm_sha256: sha.trim().to_ascii_lowercase(),
+            limits: Limits::default(),
+        })
+        .collect();
     Ok(Relayer {
         escrow: Escrow::for_contract(contract),
         grader: Grader {
@@ -56,6 +69,7 @@ fn build() -> Result<Relayer, String> {
             wasm_sha256: env("SPHINX_GRADER_SHA256")?,
             limits: Limits::default(),
         },
+        previous_graders,
         account,
         signer,
         code: CodeSource::new(
