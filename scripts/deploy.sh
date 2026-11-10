@@ -20,6 +20,25 @@ VERIFIER="${SPHINX_VERIFIER:-verifier.$SPHINX_PARENT}"
 FEE_BPS="${SPHINX_FEE_BPS:-500}"
 OWNER="${SPHINX_OWNER:-$SPHINX_PARENT}"
 ALLOW_DEV_KEYS="${SPHINX_ALLOW_DEV_KEYS:-false}"
+# Each grading run's enclave proof is checked on chain (SPHINX_ENCLAVE=0
+# turns it off): NEAR's DCAP verifier, OutLayer's image registry, and the
+# account that starts runs.
+GRADER_CALLER="${SPHINX_GRADER_CALLER:-relayer.$SPHINX_PARENT}"
+if [ "$NETWORK" = mainnet ]; then
+  QUOTE_VERIFIER="${SPHINX_QUOTE_VERIFIER:-tee-verifier-2026-08-04.near}"; REGISTRY=worker.outlayer.near
+else
+  QUOTE_VERIFIER="${SPHINX_QUOTE_VERIFIER:-tee-verifier-2026-11-02.testnet}"; REGISTRY=worker.outlayer.testnet
+fi
+if [ "${SPHINX_ENCLAVE:-1}" = 1 ]; then
+  ENCLAVE=$(jq -nc --arg v "$QUOTE_VERIFIER" --arg r "$REGISTRY" --arg c "$GRADER_CALLER" \
+    '{quote_verifier: $v, measurements_from: $r, grader_caller: $c}')
+else
+  ENCLAVE=null
+fi
+# From this date the owner may close the contract once it owes nothing, and
+# its whole balance returns to the owner.
+RETIRE_AFTER="${SPHINX_RETIRE_AFTER:-2026-12-01T00:00:00Z}"
+RETIRE_NS="$(date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$RETIRE_AFTER" +%s 2>/dev/null || date -u -d "$RETIRE_AFTER" +%s)000000000"
 [ "$OWNER" != "$SPHINX_CONTRACT" ] || { echo "SPHINX_OWNER must differ from SPHINX_CONTRACT" >&2; exit 1; }
 
 cd "$SPHINX_ROOT/crates/sphinx-contract" || exit 1
@@ -40,7 +59,7 @@ if [ "${SPHINX_UPGRADE:-0}" = 1 ]; then
     network-config "$NETWORK" sign-with-keychain send 2>&1)
 else
   OUT=$("$NEAR" contract deploy "$SPHINX_CONTRACT" use-file "$WASM" with-init-call new \
-    json-args "{\"owner\":\"$OWNER\",\"verifier\":\"$VERIFIER\",\"fee_bps\":$FEE_BPS,\"allow_dev_keys\":$ALLOW_DEV_KEYS}" prepaid-gas '100 Tgas' attached-deposit '0 NEAR' \
+    json-args "{\"owner\":\"$OWNER\",\"verifier\":\"$VERIFIER\",\"fee_bps\":$FEE_BPS,\"allow_dev_keys\":$ALLOW_DEV_KEYS,\"enclave\":$ENCLAVE,\"retire_after_ns\":\"$RETIRE_NS\"}" prepaid-gas '100 Tgas' attached-deposit '0 NEAR' \
     network-config "$NETWORK" sign-with-keychain send 2>&1)
 fi
 TX=$(grep -oE 'Transaction ID: [A-Za-z0-9]+' <<<"$OUT" | head -1 | cut -d' ' -f3)

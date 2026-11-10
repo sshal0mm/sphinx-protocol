@@ -53,6 +53,22 @@ impl Grader {
         request: &Value,
         secrets: Option<&SecretsRef>,
     ) -> Result<Value, SphinxError> {
+        self.run_traced(network, caller, signer, request, secrets).await.map(|(v, _)| v)
+    }
+
+    /// [`Grader::run`], also returning the hash of the `request_execution`
+    /// transaction, which names the run's attestation.
+    ///
+    /// # Errors
+    /// As [`Grader::run`].
+    pub async fn run_traced(
+        &self,
+        network: &NetworkConfig,
+        caller: AccountId,
+        signer: Arc<Signer>,
+        request: &Value,
+        secrets: Option<&SecretsRef>,
+    ) -> Result<(Value, String), SphinxError> {
         let input = request.to_string();
         let cost: String = Contract(self.outlayer.clone())
             .call_function(
@@ -94,7 +110,7 @@ impl Grader {
             .map_err(|e| crate::decode_failure("request_execution", &e.to_string()))?;
         let outcome = crate::outcome_value("request_execution", result)?;
         match outcome.value {
-            Some(v) if v.is_object() => Ok(v),
+            Some(v) if v.is_object() => Ok((v, outcome.tx_hash)),
             _ => {
                 Err(SphinxError::new(Code::RelayNoScore, "the enclave returned no grader response")
                     .ctx("tx_hash", outcome.tx_hash))

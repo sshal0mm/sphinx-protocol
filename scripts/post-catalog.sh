@@ -67,7 +67,8 @@ for name in "${JOBS[@]}"; do
     { echo "$name: the reference does not pass its suite" >&2; exit 1; }
   hash=$(curl -sf -X POST "$API/v1/code" --data-binary @"$dir/spec.md" | jq -r .code_hash)
   [ -n "$hash" ] && [ "$hash" != null ] || { echo "$name: storing the task text failed" >&2; exit 1; }
-  job=$(near_call "$BUYER" post_job "{\"spec_uri\":\"$PUBLIC/v1/code/$hash\",\"runtime\":\"js-boa/1\",\"reward\":\"$REWARD\",\"bond\":\"$BOND\",\"max_subs_per_agent\":${CATALOG_ATTEMPTS:-3},\"max_subs_total\":${CATALOG_MAX_SUBS:-20},\"deadline_ns\":\"$DEADLINE\"}" \
+  title=$(job_title "$dir/spec.md")
+  job=$(near_call "$BUYER" post_job "{\"title\":$title,\"spec_uri\":\"$PUBLIC/v1/code/$hash\",\"runtime\":\"js-boa/1\",\"reward\":\"$REWARD\",\"bond\":\"$BOND\",\"max_subs_per_agent\":${CATALOG_ATTEMPTS:-3},\"max_subs_total\":${CATALOG_MAX_SUBS:-20},\"deadline_ns\":\"$DEADLINE\"}" \
     "$(python3 -c "print($REWARD + $JOB_DEPOSIT)") yoctoNEAR" | tr -d '"')
   near_call "$BUYER" commit_suite "{\"job_id\":\"$job\",\"suite_hash\":\"$("$SPHINX" suite hash "$dir/suite.json")\",\"ref_solution_hash\":\"$(sha256_file "$dir/reference.js")\",\"grader_public_key\":\"$GRADER_KEY\"}" >/dev/null
   SPHINX_SIGNER_KEY="$(key_of "$BUYER")" "$SPHINX" suite store --job-id "$job" --suite "$dir/suite.json" \

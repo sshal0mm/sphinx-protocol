@@ -24,6 +24,8 @@ impl Sphinx {
             fee_bps: self.fee_bps,
             grader: self.grader.clone(),
             allow_dev_keys: self.allow_dev_keys,
+            enclave: self.enclave.clone(),
+            retire_after_ns: self.retire_after_ns.map(U64),
             job_storage_deposit: U128(JOB_STORAGE_DEPOSIT.as_yoctonear()),
             submission_storage_deposit: U128(SUBMISSION_STORAGE_DEPOSIT.as_yoctonear()),
             agent_storage_deposit: U128(AGENT_STORAGE_DEPOSIT.as_yoctonear()),

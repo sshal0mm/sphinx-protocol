@@ -82,11 +82,15 @@ PY
 
 mkdir -p "$SPHINX_ROOT/deployments/runs"
 OUT="$SPHINX_ROOT/deployments/runs/$NETWORK-job$JOB.json"
-jq -n --arg net "$NETWORK" --arg explorer "$EXPLORER" --arg c "$CONTRACT" --arg job "$JOB" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+CODE=$(rpc query "{\"request_type\":\"view_account\",\"finality\":\"final\",\"account_id\":\"$CONTRACT\"}" | jq -r .code_hash \
+  | python3 -c "import sys;A='123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';n=0
+for ch in sys.stdin.read().strip(): n=n*58+A.index(ch)
+print(n.to_bytes(32,'big').hex())")
+jq -n --arg code "$CODE" --arg net "$NETWORK" --arg explorer "$EXPLORER" --arg c "$CONTRACT" --arg job "$JOB" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --argjson config "$CONFIG" --argjson history "$HISTORY" --argjson jobv "$JOBV" --argjson subs "$SUBS" \
   --arg itx "$IDENTITY_TX" --arg caller "$CALLER" --arg iout "$IDENTITY_OUT" --argjson att "$ATTESTATION" \
   --arg reg "$(jq -r .registration_tx <<<"$GRADER")" --slurpfile results "$WORK/results.json" '{
-    schema: "sphinx.run/1", network: $net, contract: $c, job_id: $job, recorded_at: $at,
+    schema: "sphinx.run/1", network: $net, contract: $c, job_id: $job, recorded_at: $at, code_sha256: $code,
     config: $config, grader_history: $history, job: $jobv, submissions: $subs,
     grader: {identity_tx: $itx, caller: $caller, identity_output_base64: $iout, attestation: $att, registration_tx: $reg},
     results: $results[0],

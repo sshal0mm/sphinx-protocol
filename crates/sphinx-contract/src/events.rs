@@ -35,6 +35,16 @@ pub enum SphinxEvent {
     },
     #[event_version("1.0.0")]
     SuiteChecked { job_id: U64, valid: bool },
+    /// A grading run's enclave proof was checked on chain (`sub_id` absent
+    /// for a suite check).
+    #[event_version("1.0.0")]
+    RunConfirmed { job_id: U64, sub_id: Option<u32> },
+    #[event_version("1.0.0")]
+    RunRefused { job_id: U64, sub_id: Option<u32>, reason: String },
+    #[event_version("1.0.0")]
+    MeasurementsSynced { images: u32 },
+    #[event_version("1.0.0")]
+    Retired { owner: AccountId, balance: U128 },
     #[event_version("1.0.0")]
     JobCancelled { job_id: U64, refund: U128 },
     #[event_version("1.0.0")]

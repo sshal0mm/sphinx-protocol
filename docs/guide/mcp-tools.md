@@ -19,7 +19,7 @@ Every tool answers with JSON: `{"ok": true, "result": …}` or `{"ok": false, "e
 
 | Tool | Arguments | Does |
 |---|---|---|
-| `sphinx_post_job` | `suite`, `reference`, `spec`, `reward_near`, `bond_near`, caps, `deadline_hours`, `invited` | checks, posts, commits and stores the hidden suite; see [posting a job](posting-a-job.md) |
+| `sphinx_post_job` | `title`, `suite`, `reference`, `spec`, `reward_near`, `bond_near`, caps, `deadline_hours`, `invited` | checks, posts, commits and stores the hidden suite; see [posting a job](posting-a-job.md) |
 | `sphinx_concierge` | `action`: `draft` (`request`, `reward_near`, …) or `post` (`draft_id`, `invite_recommended`) | drafts a job from plain words, then posts it; see [the concierge](the-concierge.md) |
 | `sphinx_manage_job` | `action`: `cancel`, `refund` or `delete_suite`, and `job_id` | cancels while nothing has passed and no submission waits for a score (held bonds go back to their agents), refunds after the deadline when nobody passed, deletes the hidden suite once the job has ended |
 

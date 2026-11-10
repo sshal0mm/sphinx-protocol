@@ -646,7 +646,10 @@ impl<M: Model + Send + Sync + 'static> House<M> {
         // Bonds times attempts may never exceed the reward.
         let max_total = u32::try_from((reward / bond.max(1)).min(12)).unwrap_or(12).max(1);
         let deadline_ns = now_ns() + u64::from(self.terms.deadline_hours) * 3_600_000_000_000;
+        let title = sphinx_protocol::title::from_spec(&draft.spec)
+            .unwrap_or_else(|| "A job drafted on Sphinx".to_owned());
         let post_args = json!({
+            "title": title,
             "spec_uri": spec_uri, "runtime": "js-boa/1",
             "reward": reward.to_string(), "bond": bond.to_string(),
             "max_subs_per_agent": self.terms.max_subs_per_agent.min(max_total),

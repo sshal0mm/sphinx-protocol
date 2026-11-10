@@ -17,6 +17,7 @@ pub mod hidden;
 pub mod message;
 mod serde_u64;
 pub mod suite;
+pub mod title;
 
 pub use catalog::Code;
 pub use error::{BondEffect, ErrorReport, Retry, SphinxError};

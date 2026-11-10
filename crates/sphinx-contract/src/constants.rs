@@ -14,6 +14,8 @@ pub const MIN_BOND: NearToken = NearToken::from_millinear(10);
 /// Upper bound on submissions per job; keeps every per-job structure bounded.
 pub const MAX_SUBS_TOTAL: u32 = 64;
 pub const MAX_URI_LEN: usize = 512;
+/// Longest job title, in characters.
+pub const MAX_TITLE_CHARS: usize = sphinx_protocol::title::MAX_TITLE_CHARS;
 pub const MAX_ATTESTATION_REF_LEN: usize = 256;
 
 /// Verifier fee ceiling in basis points (20%).

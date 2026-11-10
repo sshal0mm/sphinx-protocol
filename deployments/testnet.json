@@ -1,9 +1,9 @@
 {
   "network": "testnet",
-  "contract": "escrow.sphinx999.testnet",
+  "contract": "escrow2.sphinx999.testnet",
   "owner": "sphinx999.testnet",
-  "code_sha256": "2dde77b97e64d206eff2af052c6c138a57568322b6170fe76b7ae3f14cad255a",
-  "deploy_tx": "9q91JAtciwkjSUyTkLazNLiPXkUJztKCnkLcWN3fHaqz",
+  "code_sha256": "9f5a462438f243788c1a5f90d29e8277bbdb8fd001ff50ff458cb6b4c525700b",
+  "deploy_tx": "RCyuThFaAyD47DfSgduhm1uFXuwXMGCEgKMb8t9EQ18",
   "verifier": "verifier.sphinx999.testnet",
   "fee_bps": 500,
   "allow_dev_keys": false,
@@ -92,5 +92,5 @@
       "source_tag": "grader-e7a89c21"
     }
   ],
-  "upgrade_tx": "7FixDzCpnCftUi2sTTsaZEVMw2cNxe54dATrjcrNuF8d"
+  "upgrade_tx": "CRAmn1d6BbHm6ZaT53qSXV6qP7MnrxdE5xnDvif732a9"
 }

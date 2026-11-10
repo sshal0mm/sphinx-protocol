@@ -7,7 +7,7 @@ use sphinx_protocol::{Code, SphinxError, SuiteCheck, SUPPORTED_RUNTIMES};
 
 use crate::constants::{
     GRADING_WINDOW_NS, JOB_STORAGE_DEPOSIT, MAX_INVITES, MAX_JOB_DURATION_NS, MAX_SUBS_TOTAL,
-    MAX_URI_LEN, MIN_BOND, MIN_JOB_DURATION_NS, MIN_REWARD,
+    MAX_TITLE_CHARS, MAX_URI_LEN, MIN_BOND, MIN_JOB_DURATION_NS, MIN_REWARD,
 };
 use crate::errors::{self, ensure, Result};
 use crate::events::SphinxEvent;
@@ -40,6 +40,7 @@ impl Sphinx {
     #[allow(clippy::too_many_arguments, reason = "mirrors the public JSON API")]
     pub fn post_job(
         &mut self,
+        title: String,
         spec_uri: String,
         runtime: String,
         reward: U128,
@@ -72,6 +73,7 @@ impl Sphinx {
             now,
             spec_uri_len: spec_uri.len(),
             runtime: &runtime,
+            title: &title,
         })?;
         let reward_y = reward.0;
 
@@ -93,6 +95,7 @@ impl Sphinx {
             Job {
                 id: U64(id),
                 buyer,
+                title,
                 spec_uri,
                 runtime,
                 reward,
@@ -248,6 +251,7 @@ impl Sphinx {
             errors::field_mismatch("nonce", &check.nonce, &commit.suite_check_nonce)
         );
         verify_signature(&commit.grader.public_key, &check.signing_message(), &signature_hex)?;
+        self.take_confirmed_run(job_id, None, &check.signing_message())?;
 
         SphinxEvent::SuiteChecked { job_id: U64(job_id), valid: check.valid }.emit();
         if check.valid {
@@ -415,6 +419,7 @@ struct NewJob<'a> {
     now: u64,
     spec_uri_len: usize,
     runtime: &'a str,
+    title: &'a str,
 }
 
 /// Enforces every bound on a new job; see the error catalog for each rule.
@@ -525,6 +530,20 @@ fn check_new_job_shape(p: &NewJob<'_>) -> Result<()> {
         )
         .ctx("len", p.spec_uri_len)
         .ctx("max", MAX_URI_LEN)
+    );
+    let title_len = p.title.chars().count();
+    ensure!(
+        (1..=MAX_TITLE_CHARS).contains(&title_len)
+            && p.title.trim() == p.title
+            && !p.title.chars().any(char::is_control),
+        SphinxError::new(
+            Code::JobBadTitle,
+            format!(
+                "a title is 1 to {MAX_TITLE_CHARS} characters on one line, without leading or trailing spaces; got {title_len}"
+            ),
+        )
+        .ctx("len", title_len)
+        .ctx("max", MAX_TITLE_CHARS)
     );
     ensure!(
         SUPPORTED_RUNTIMES.contains(&p.runtime),

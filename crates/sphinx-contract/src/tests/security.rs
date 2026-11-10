@@ -126,7 +126,7 @@ fn only_owner_registers_keys() {
 #[test]
 fn commit_requires_a_registered_key() {
     ctx(&owner(), 0, START_NS);
-    let mut c = Sphinx::new(owner(), verifier(), 500, true).unwrap();
+    let mut c = Sphinx::new(owner(), verifier(), 500, true, None, None).unwrap();
     let job = post(&mut c, 2, 5);
     ctx(&buyer(), 0, START_NS + 1);
     assert_eq!(
@@ -159,7 +159,7 @@ fn commit_refuses_a_grader_key_other_than_the_one_checked() {
 #[test]
 fn a_contract_without_dev_keys_refuses_them_and_keeps_a_key_history() {
     ctx(&owner(), 1, START_NS);
-    let mut c = Sphinx::new(owner(), verifier(), 500, false).unwrap();
+    let mut c = Sphinx::new(owner(), verifier(), 500, false, None, None).unwrap();
     assert!(!c.get_config().allow_dev_keys);
     let pk = hex::encode(grader_key().verifying_key().to_bytes());
     let wasm = Hash32::digest(b"grader.wasm").to_string();
@@ -216,6 +216,6 @@ fn registering_a_key_needs_one_yocto() {
 #[test]
 fn the_owner_is_the_account_named_at_init() {
     ctx(&acct("deployer"), 0, START_NS);
-    let c = Sphinx::new(owner(), verifier(), 500, true).unwrap();
+    let c = Sphinx::new(owner(), verifier(), 500, true, None, None).unwrap();
     assert_eq!(c.get_config().owner, owner());
 }

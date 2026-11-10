@@ -124,7 +124,7 @@ pub fn encrypt_submission(box_public_key: &str, code: &[u8]) -> Result<String, S
 
 /// The profile name used for a job's hidden suite.
 pub fn profile_for_job(job_id: u64) -> String {
-    format!("sphinx-job-{job_id}")
+    hidden::profile_for_job(job_id)
 }
 
 /// Access rule: only `relayer` (as transaction signer and direct caller)

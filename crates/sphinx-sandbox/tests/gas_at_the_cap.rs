@@ -109,7 +109,7 @@ async fn full_job(s: &Setup, deadline_from_now_s: u64) -> String {
         .buyer
         .call(s.contract.id(), "post_job")
         .args_json(json!({
-            "spec_uri": "sandbox", "runtime": "js-boa/1", "reward": reward.to_string(), "bond": bond.to_string(),
+            "title": "Largest job", "spec_uri": "sandbox", "runtime": "js-boa/1", "reward": reward.to_string(), "bond": bond.to_string(),
             "max_subs_per_agent": 1, "max_subs_total": SUBS,
             "deadline_ns": (now + deadline_from_now_s * 1_000_000_000).to_string()
         }))

@@ -138,6 +138,36 @@ Every Sphinx error carries a stable `code`, a one-line `message` with the actual
 - bond_effect: `none`
 - hint: shorten the URI, for example to a content hash or short link
 
+### SPHINX_E_JOB_BAD_TITLE
+
+- retry: `fix_input`
+- bond_effect: `none`
+- hint: give the job a title of 1 to 80 characters on one line
+
+### SPHINX_E_ENCLAVE_PROOF_REFUSED
+
+- retry: `never`
+- bond_effect: `none`
+- hint: send the attestation, output, quote and collateral of this job's own grading run
+
+### SPHINX_E_ENCLAVE_RUN_NOT_CONFIRMED
+
+- retry: `wait`
+- bond_effect: `none`
+- hint: call confirm_run with the run's attestation first (contract view is_run_confirmed)
+
+### SPHINX_E_RETIRE_TOO_EARLY
+
+- retry: `wait`
+- bond_effect: `none`
+- hint: the contract can be closed only after its retire date (contract view get_config)
+
+### SPHINX_E_RETIRE_NOT_EMPTY
+
+- retry: `wait`
+- bond_effect: `none`
+- hint: close the contract only once it owes nothing (contract view get_stats)
+
 ### SPHINX_E_JOB_BAD_RUNTIME
 
 - retry: `fix_input`

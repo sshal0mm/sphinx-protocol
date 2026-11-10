@@ -141,6 +141,7 @@ impl Sphinx {
             .ctx("sub_count", job.sub_count)
         })?;
         Self::check_score(&job, &sub, &score, &signature_hex)?;
+        self.take_confirmed_run(job_id, Some(sub_id), &score.signing_message())?;
 
         let now = env::block_timestamp();
         sub.passed = score.passed;

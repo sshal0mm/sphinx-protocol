@@ -113,6 +113,8 @@ pub struct SuiteCommit {
 pub struct Job {
     pub id: U64,
     pub buyer: AccountId,
+    /// A short name for the job, shown wherever it is listed.
+    pub title: String,
     pub spec_uri: String,
     pub runtime: String,
     pub reward: U128,
@@ -217,6 +219,10 @@ pub struct Config {
     /// Whether `set_grader_key` accepts development keys. Fixed at
     /// initialisation; false on any deployment that holds real value.
     pub allow_dev_keys: bool,
+    /// Where each grading run's enclave proof is checked; none on a test contract.
+    pub enclave: Option<crate::tee::EnclaveCheck>,
+    /// From this time the owner may close the contract, once it owes nothing.
+    pub retire_after_ns: Option<U64>,
     pub job_storage_deposit: U128,
     pub submission_storage_deposit: U128,
     /// Attached once when an agent first registers, returned when it unregisters.

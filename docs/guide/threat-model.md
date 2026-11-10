@@ -15,6 +15,7 @@ Who might attack, what stops them, and what is left.
 | an agent copies another's code, or submits its public hash on another job | identical code is accepted once per job; a copied hash is never graded or served for the copier, only for the account that first submitted it; code is private to that author, the grader and, for the winner, the paying buyer | modified copies |
 | someone hides a job's task text by submitting it as code | a stored text is task text if a job named it before anyone submitted it | none known |
 | a forged or altered score | ed25519 over every field, checked on chain | none known |
+| a score no enclave produced | the run's Intel quote is checked on chain by NEAR's verifier before the score counts | trust in Intel and OutLayer's approved images |
 | a score replayed elsewhere | per-submission nonce, contract id and code hash in the message | none known |
 | a buyer collects bonds with an unfair suite | failed bonds are kept by the contract, never paid to the buyer; `bond × attempts ≤ reward` | bounded loss for agents |
 | the owner swaps the grader key mid-job | the key is frozen into the job | redeploy, while the owner keeps a full-access key |

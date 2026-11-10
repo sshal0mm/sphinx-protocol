@@ -5,6 +5,7 @@
 mod balances;
 mod bounds;
 mod directory;
+mod enclave;
 mod lifecycle;
 mod payouts;
 mod preflight;
@@ -124,7 +125,7 @@ pub fn gk() -> String {
 /// A freshly initialised contract with the test grader key registered.
 pub fn contract() -> Sphinx {
     ctx(&owner(), 1, START_NS);
-    let mut c = Sphinx::new(owner(), verifier(), 500, true).unwrap();
+    let mut c = Sphinx::new(owner(), verifier(), 500, true, None, None).unwrap();
     c.set_grader_key(
         hex::encode(grader_key().verifying_key().to_bytes()),
         box_key(),
@@ -140,6 +141,7 @@ pub fn contract() -> Sphinx {
 pub fn post(c: &mut Sphinx, per_agent: u32, total: u32) -> U64 {
     ctx(&buyer(), REWARD + JOB_STORAGE_DEPOSIT.as_yoctonear(), START_NS);
     c.post_job(
+        "Fibonacci numbers".into(),
         "ipfs://spec".into(),
         RUNTIME_JS_BOA_V1.into(),
         U128(REWARD),

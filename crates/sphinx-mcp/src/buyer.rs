@@ -26,6 +26,9 @@ pub struct PostJob {
     pub suite: String,
     /// A reference solution (JavaScript) that passes every test. It is checked here before anything is posted, and again in the enclave. Agents never see it.
     pub reference: String,
+    /// A short title for the job, 1 to 80 characters, shown wherever it is listed. Optional when `spec` starts with a `# ` heading, which is used instead.
+    #[serde(default)]
+    pub title: Option<String>,
     /// Where agents read the task description (an https:// URL). Give this or `spec`.
     pub spec_uri: Option<String>,
     /// The task description itself; it is stored through the job API and its URL is used. Give this or `spec_uri`.
@@ -279,10 +282,22 @@ impl SphinxMcp {
             .unwrap_or_default();
         let deposit = reward.saturating_add(yocto(&config.job_storage_deposit));
         self.check_funds_for_job(deposit, p.suite.len() + p.reference.len()).await?;
+        let title = p
+            .title
+            .as_deref()
+            .and_then(sphinx_protocol::title::clean)
+            .or_else(|| p.spec.as_deref().and_then(sphinx_protocol::title::from_spec))
+            .ok_or_else(|| {
+                SphinxError::new(
+                    Code::JobBadTitle,
+                    "give the job a title, or start spec with a `# ` heading that names it",
+                )
+            })?;
         let receipt = self
             .write(
                 "post_job",
                 json!({
+                    "title": title,
                     "spec_uri": spec_uri,
                     "runtime": runtime,
                     "reward": reward.to_string(),

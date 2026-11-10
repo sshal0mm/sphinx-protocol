@@ -122,6 +122,7 @@ fn open_invite_job(c: &mut Sphinx, invited: Vec<AccountId>) -> U64 {
     ctx(&buyer(), REWARD + JOB_STORAGE_DEPOSIT.as_yoctonear(), START_NS);
     let job = c
         .post_job(
+            "Fibonacci numbers".into(),
             "ipfs://spec".into(),
             RUNTIME_JS_BOA_V1.into(),
             U128(REWARD),
@@ -170,6 +171,7 @@ fn invites_are_capped() {
     let many = (0..=MAX_INVITES).map(|i| acct(&format!("agent-{i}"))).collect();
     let err = c
         .post_job(
+            "Fibonacci numbers".into(),
             "x".into(),
             RUNTIME_JS_BOA_V1.into(),
             U128(REWARD),

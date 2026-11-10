@@ -9,8 +9,8 @@ authors.workspace = true
 publish = false
 
 [dependencies]
-rmcp = { version = "3", features = ["client", "transport-child-process"] }
-tokio = { version = "1", features = ["process"] }
+rmcp = { version = "3", features = ["client", "transport-child-process", "transport-streamable-http-client-reqwest"] }
+tokio = { version = "1", features = ["process", "macros", "rt-multi-thread"] }
 serde_json.workspace = true
 
 [lints]

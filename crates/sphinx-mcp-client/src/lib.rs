@@ -65,6 +65,33 @@ impl McpClient {
         Ok(Self { service })
     }
 
+    /// Connects to a running Sphinx MCP server over streamable HTTP, such as
+    /// a hosted connector address.
+    ///
+    /// # Errors
+    /// When the server cannot be reached or does not complete the handshake.
+    pub async fn connect(url: &str) -> Result<Self, ToolFailure> {
+        let transport = rmcp::transport::StreamableHttpClientTransport::from_uri(url.to_owned());
+        let service =
+            ().serve(transport)
+                .await
+                .map_err(|e| ToolFailure::new(format!("MCP handshake with the connector failed: {e}")))?;
+        Ok(Self { service })
+    }
+
+    /// The names of the tools the server offers.
+    ///
+    /// # Errors
+    /// A transport failure.
+    pub async fn tool_names(&self) -> Result<Vec<String>, ToolFailure> {
+        let tools = self
+            .service
+            .list_all_tools()
+            .await
+            .map_err(|e| ToolFailure::new(format!("tools/list failed: {e}")))?;
+        Ok(tools.into_iter().map(|t| t.name.to_string()).collect())
+    }
+
     /// Calls `tool` with `args` and returns its `result`.
     ///
     /// # Errors

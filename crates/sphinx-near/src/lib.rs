@@ -8,6 +8,7 @@
 //! from the `SPHINX_E_*` text; transport problems become
 //! `SPHINX_E_RELAY_RPC_FAILED`.
 
+pub mod enclave;
 pub mod hidden_suite;
 pub mod nep413;
 pub mod outlayer;
@@ -70,6 +71,10 @@ pub fn call_gas(method: &str) -> NearGas {
         | "unregister_agent"
         | "record_suite_check"
         | "set_grader_key" => 20,
+        // NEAR's DCAP verifier burns about 176 Tgas; the rest is the call
+        // and its callback.
+        "confirm_run" => 250,
+        "sync_measurements" => 80,
         // One transfer and its callback.
         "reclaim_bond" | "withdraw" | "withdraw_balance" => 30,
         // Up to five transfers and their callbacks: a paid score, settling,

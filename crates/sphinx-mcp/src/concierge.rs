@@ -210,6 +210,7 @@ impl SphinxMcp {
             .post_job(PostJob {
                 suite: saved.draft.suite.clone(),
                 reference: saved.draft.reference.clone(),
+                title: None,
                 spec_uri: None,
                 spec: Some(saved.draft.spec.clone()),
                 reward_near: t.reward_near.clone(),

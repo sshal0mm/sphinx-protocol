@@ -48,6 +48,9 @@ pub struct SuiteCommit {
 pub struct Job {
     pub id: String,
     pub buyer: String,
+    /// The job's title; contracts deployed before titles have none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     pub spec_uri: String,
     pub runtime: String,
     pub reward: String,
@@ -101,6 +104,13 @@ pub struct Config {
     pub verifier: String,
     pub fee_bps: u16,
     pub grader: Option<GraderKey>,
+    /// Where each grading run's enclave proof is checked on chain; absent
+    /// on contracts deployed before the check.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enclave: Option<serde_json::Value>,
+    /// From this time the owner may close the contract once it owes nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retire_after_ns: Option<String>,
     pub job_storage_deposit: String,
     pub submission_storage_deposit: String,
     #[serde(default)]

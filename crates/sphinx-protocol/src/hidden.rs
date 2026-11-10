@@ -13,3 +13,11 @@ pub const REFERENCE: &str = "REFERENCE";
 pub const CONTRACT: &str = "CONTRACT";
 /// The job id (decimal) the suite was stored for.
 pub const JOB_ID: &str = "JOB_ID";
+
+/// The keystore profile a job's hidden suite is stored under. OutLayer names
+/// a stored secret `{owner}/{profile}` in each run's attestation, so the
+/// escrow can check a run read this job's tests.
+#[must_use]
+pub fn profile_for_job(job_id: u64) -> String {
+    format!("sphinx-job-{job_id}")
+}

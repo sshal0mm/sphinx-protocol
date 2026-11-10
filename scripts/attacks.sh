@@ -98,7 +98,7 @@ yocto() { python3 -c "print(int($1))"; }
 echo "== setup: buyer posts a job and the enclave opens it"
 DEADLINE=$(( ($(date +%s) + 3600) * 1000000000 ))
 SPEC=$(store $F/spec.md)
-JOB=$(near_call "buyer.$P" post_job "{\"spec_uri\":\"$API/v1/code/$SPEC\",\"runtime\":\"js-boa/1\",\"reward\":\"$REWARD\",\"bond\":\"$BOND\",\"max_subs_per_agent\":2,\"max_subs_total\":5,\"deadline_ns\":\"$DEADLINE\"}" \
+JOB=$(near_call "buyer.$P" post_job "{\"title\":\"Attack gallery target\",\"spec_uri\":\"$API/v1/code/$SPEC\",\"runtime\":\"js-boa/1\",\"reward\":\"$REWARD\",\"bond\":\"$BOND\",\"max_subs_per_agent\":2,\"max_subs_total\":5,\"deadline_ns\":\"$DEADLINE\"}" \
   "$(yocto "$REWARD+$JOB_DEPOSIT") yoctoNEAR" | tr -d '"')
 near_call "buyer.$P" commit_suite "{\"job_id\":\"$JOB\",\"suite_hash\":\"$("$SPHINX" suite hash $F/suite.json)\",\"ref_solution_hash\":\"$(sha256_file $F/reference.js)\",\"grader_public_key\":\"$(jq -r .grader.public_key <<<"$CONFIG")\"}" >/dev/null
 SPHINX_SIGNER_KEY="$(key_of "buyer.$P")" "$SPHINX" suite store --job-id "$JOB" --suite $F/suite.json --reference $F/reference.js --buyer "buyer.$P" >/dev/null

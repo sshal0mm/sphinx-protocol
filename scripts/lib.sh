@@ -84,6 +84,8 @@ require_tools() {
 call_gas() {
   case "$1" in
     submit|submit_from_balance|deposit_balance|post_job|commit_suite|register_agent|unregister_agent|record_suite_check|set_grader_key) echo 20 ;;
+    confirm_run) echo 250 ;;
+    sync_measurements) echo 80 ;;
     reclaim_bond|withdraw|withdraw_balance) echo 30 ;;
     *) echo 50 ;;
   esac
@@ -146,4 +148,12 @@ code_reader_token() {
     SPHINX_CODE_READER_TOKEN=$(cat "$file")
   fi
   export SPHINX_CODE_READER_TOKEN
+}
+
+# The job title a task description gives itself: its first "# " heading, as a
+# JSON string (at most 80 characters, "Job: " dropped).
+job_title() {
+  local t
+  t=$(grep -m1 '^# ' "$1" | sed -e 's/^# //' -e 's/^Job: //' | cut -c1-80)
+  jq -Rn --arg t "${t:-A Sphinx job}" '$t'
 }

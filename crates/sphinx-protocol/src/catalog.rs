@@ -110,6 +110,16 @@ catalog! {
         "set the deadline no more than ctx.max_duration_ns after now";
     JobUriTooLong => "SPHINX_E_JOB_URI_TOO_LONG", Contract, FixInput, None,
         "shorten the URI, for example to a content hash or short link";
+    JobBadTitle => "SPHINX_E_JOB_BAD_TITLE", Contract, FixInput, None,
+        "give the job a title of 1 to 80 characters on one line";
+    EnclaveProofRefused => "SPHINX_E_ENCLAVE_PROOF_REFUSED", Contract, Never, None,
+        "send the attestation, output, quote and collateral of this job's own grading run";
+    EnclaveRunNotConfirmed => "SPHINX_E_ENCLAVE_RUN_NOT_CONFIRMED", Contract, Wait, None,
+        "call confirm_run with the run's attestation first (contract view is_run_confirmed)";
+    RetireTooEarly => "SPHINX_E_RETIRE_TOO_EARLY", Contract, Wait, None,
+        "the contract can be closed only after its retire date (contract view get_config)";
+    RetireNotEmpty => "SPHINX_E_RETIRE_NOT_EMPTY", Contract, Wait, None,
+        "close the contract only once it owes nothing (contract view get_stats)";
     JobBadRuntime => "SPHINX_E_JOB_BAD_RUNTIME", Contract, FixInput, None,
         "use one of the runtimes listed in ctx.known";
     JobHasSubmissions => "SPHINX_E_JOB_HAS_SUBMISSIONS", Contract, Never, None,

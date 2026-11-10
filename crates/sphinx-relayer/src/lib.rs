@@ -35,10 +35,11 @@ pub struct Relayer {
     pub code: CodeSource,
 }
 
-/// Least the grader's caller must hold to start an enclave run: 0.1 NEAR of
-/// prepaid gas held at the pessimistic price, OutLayer's fee and its own
-/// storage, with a little room.
-pub const MIN_RUN_BALANCE: u128 = 115_000_000_000_000_000_000_000;
+/// Least the grader's caller must hold to grade one run: the run's 100 Tgas
+/// and the enclave proof's 250 Tgas, each held at the pessimistic price (0.1
+/// NEAR per 100 Tgas on mainnet) while it is sent, OutLayer's fee and the
+/// account's own storage, with a little room. Most of it comes back.
+pub const MIN_RUN_BALANCE: u128 = 380_000_000_000_000_000_000_000;
 
 /// Largest submission the relayer reads; the grader refuses anything larger.
 pub const MAX_CODE_BYTES: usize = 64 * 1024;
@@ -237,7 +238,8 @@ impl Relayer {
             "expected_suite_hash": commit.suite_hash, "expected_ref_hash": commit.ref_solution_hash,
             "epoch_ms": epoch_ms(&job),
         });
-        let response = self.run_grader(&job, &request).await?;
+        let (response, run_tx) = self.run_grader(&job, &request).await?;
+        self.confirm(&job, None, &run_tx).await?;
         let valid = response["result"]["valid"].as_bool().unwrap_or(false);
         self.post(
             "record_suite_check",
@@ -284,7 +286,8 @@ impl Relayer {
         let code = self.fetch_code(&sub).await?;
         let request =
             grade_request(self.escrow.contract_id().as_str(), &job, &sub, &code, box_key)?;
-        let response = self.run_grader(&job, &request).await?;
+        let (response, run_tx) = self.run_grader(&job, &request).await?;
+        self.confirm(&job, Some(sub_id), &run_tx).await?;
         let summary = format!(
             "job {job_id} sub {sub_id} ({}): {}/{}",
             sub.agent, response["result"]["passed"], response["result"]["total"]
@@ -351,8 +354,57 @@ impl Relayer {
             .await
     }
 
-    /// Runs the grader with the job's hidden suite and returns a successful response.
-    async fn run_grader(&self, job: &Job, request: &Value) -> Result<Value, SphinxError> {
+    /// When the escrow checks enclave proofs on chain, proves the run sent in
+    /// `run_tx` with `confirm_run` before its signed result is posted: the
+    /// run's attestation, output, quote and a collateral NEAR's verifier
+    /// accepts. A contract without the check needs nothing.
+    async fn confirm(
+        &self,
+        job: &Job,
+        sub_id: Option<u32>,
+        run_tx: &str,
+    ) -> Result<(), SphinxError> {
+        let config: Value = self.escrow.view("get_config", json!({})).await?;
+        if config["enclave"].is_null() {
+            return Ok(());
+        }
+        let accounts = if self.escrow.is_mainnet() {
+            sphinx_near::enclave::EnclaveAccounts::mainnet()
+        } else {
+            sphinx_near::enclave::EnclaveAccounts::testnet()
+        };
+        let proof = sphinx_near::enclave::collect(
+            self.escrow.network(),
+            &accounts,
+            run_tx,
+            self.account.as_str(),
+        )
+        .await?;
+        let o = self
+            .escrow
+            .call(
+                self.account.clone(),
+                self.signer.clone(),
+                "confirm_run",
+                proof.args(job.id_u64(), sub_id),
+                NearToken::from_yoctonear(0),
+                sphinx_near::call_gas("confirm_run"),
+            )
+            .await?;
+        if o.value == Some(Value::Bool(true)) {
+            return Ok(());
+        }
+        Err(SphinxError::new(
+            Code::EnclaveProofRefused,
+            format!("job {}: the escrow refused the run's enclave proof (tx {}); see its run_refused event", job.id, o.tx_hash),
+        )
+        .ctx("job_id", &job.id)
+        .ctx("tx_hash", o.tx_hash))
+    }
+
+    /// Runs the grader with the job's hidden suite and returns a successful
+    /// response, with the hash of the run's transaction.
+    async fn run_grader(&self, job: &Job, request: &Value) -> Result<(Value, String), SphinxError> {
         let grader = self.grader_for(job)?;
         if !self.suite_is_stored(job, grader).await? {
             return Err(SphinxError::new(
@@ -367,8 +419,8 @@ impl Relayer {
         }
         let secrets =
             SecretsRef { profile: profile_for_job(job.id_u64()), account_id: job.buyer.clone() };
-        let response = grader
-            .run(
+        let (response, run_tx) = grader
+            .run_traced(
                 self.escrow.network(),
                 self.account.clone(),
                 self.signer.clone(),
@@ -377,7 +429,7 @@ impl Relayer {
             )
             .await?;
         if response["ok"] == true && response["signature"].is_string() {
-            return Ok(response);
+            return Ok((response, run_tx));
         }
         let report = &response["error"];
         let code = report["code"]

@@ -25,6 +25,7 @@ mod events;
 mod jobs;
 mod payouts;
 mod submissions;
+pub mod tee;
 pub mod types;
 mod views;
 
@@ -39,6 +40,7 @@ use sphinx_protocol::{Code, Hash32, SphinxError};
 use crate::constants::{MAX_ATTESTATION_REF_LEN, MAX_FEE_BPS};
 use crate::errors::{ensure, ContractError, Result};
 use crate::events::SphinxEvent;
+use crate::tee::EnclaveCheck;
 use crate::types::{AgentProfile, AgentStats, AgentUse, GraderKey, Job, KeyMode, Submission};
 
 #[near(serializers = [borsh])]
@@ -56,6 +58,9 @@ pub(crate) enum StorageKey {
     /// Prepaid agent balances (`balances.rs`), kept outside the contract
     /// struct so adding them leaves the stored state's layout unchanged.
     AgentBalances,
+    /// Grading runs whose enclave proof was checked (`tee.rs`), until their
+    /// signed result is recorded.
+    ConfirmedRuns,
 }
 
 #[near(
@@ -96,6 +101,13 @@ pub struct Sphinx {
     /// Whether `set_grader_key` accepts `dev` keys. Fixed at initialisation;
     /// a deployment for real money sets it to false.
     allow_dev_keys: bool,
+    /// Where each grading run's enclave proof is checked; none on a contract
+    /// for local tests.
+    enclave: Option<EnclaveCheck>,
+    /// OutLayer's approved worker images, read by `sync_measurements`.
+    approved_images: Vec<[u8; 32]>,
+    /// From this time the owner may close the contract, once it owes nothing.
+    retire_after_ns: Option<u64>,
 }
 
 #[near]
@@ -116,6 +128,8 @@ impl Sphinx {
         verifier: AccountId,
         fee_bps: u16,
         allow_dev_keys: bool,
+        enclave: Option<EnclaveCheck>,
+        retire_after_ns: Option<U64>,
     ) -> Result<Self> {
         ensure!(
             fee_bps <= MAX_FEE_BPS,
@@ -149,6 +163,9 @@ impl Sphinx {
             invites: LookupMap::new(StorageKey::Invites),
             grader_history: Vector::new(StorageKey::GraderHistory),
             allow_dev_keys,
+            enclave,
+            approved_images: Vec::new(),
+            retire_after_ns: retire_after_ns.map(|t| t.0),
         })
     }
 
@@ -225,6 +242,54 @@ impl Sphinx {
         self.grader_history.push(key.clone());
         self.grader = Some(key);
         Ok(())
+    }
+
+    /// Closes the contract and sends its whole balance to the owner: allowed
+    /// only for the owner, only after the retire date fixed at
+    /// initialisation, and only when the contract owes nothing (no locked
+    /// reward, bond or prepaid balance and no unclaimed payout). This is how
+    /// the storage deposit comes back once the contract's own keys are gone.
+    ///
+    /// # Errors
+    ///
+    /// - `SPHINX_E_AUTH_NOT_OWNER`
+    /// - `SPHINX_E_RETIRE_TOO_EARLY`
+    /// - `SPHINX_E_RETIRE_NOT_EMPTY`
+    #[payable]
+    #[handle_result(aliased)]
+    pub fn retire(&mut self) -> Result<near_sdk::Promise> {
+        near_sdk::assert_one_yocto();
+        self.assert_owner()?;
+        let now = env::block_timestamp();
+        let after = self.retire_after_ns.unwrap_or(u64::MAX);
+        ensure!(
+            now >= after,
+            SphinxError::new(
+                Code::RetireTooEarly,
+                format!("the contract can be closed from {after} (now {now})"),
+            )
+            .ctx("retire_after_ns", after)
+            .ctx("now_ns", now)
+        );
+        ensure!(
+            self.total_locked == 0 && self.total_unclaimed == 0,
+            SphinxError::new(
+                Code::RetireNotEmpty,
+                format!(
+                    "the contract still owes {} yoctoNEAR locked and {} unclaimed",
+                    self.total_locked, self.total_unclaimed
+                ),
+            )
+            .ctx("total_locked", self.total_locked)
+            .ctx("total_unclaimed", self.total_unclaimed)
+        );
+        let balance = env::account_balance().as_yoctonear();
+        SphinxEvent::Retired {
+            owner: self.owner.clone(),
+            balance: near_sdk::json_types::U128(balance),
+        }
+        .emit();
+        Ok(near_sdk::Promise::new(env::current_account_id()).delete_account(self.owner.clone()))
     }
 }
 

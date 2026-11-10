@@ -4,7 +4,7 @@
 
 | From | Method | To | Condition | Test |
 |---|---|---|---|---|
-| — | `post_job` | Draft | bounds hold, exact deposit | `bounds::post_job_rejects_each_bad_parameter` |
+| — | `post_job` | Draft | a 1-80 character title, bounds hold, exact deposit | `bounds::post_job_rejects_each_bad_parameter`, `bounds::a_job_needs_a_short_one_line_title` |
 | Draft | `commit_suite` | Committed | buyer; grader key registered | `security::commit_requires_a_registered_key` |
 | Committed | `record_suite_check(valid)` | Open | fields match, signature verifies, before deadline | `lifecycle::fail_then_pass_pays_exactly` |
 | Committed | `record_suite_check(invalid)` | Rejected | as above; reward refunded | `lifecycle::impossible_suite_refunds_the_buyer` |

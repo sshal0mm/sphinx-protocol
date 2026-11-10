@@ -13,6 +13,7 @@ fn try_post(
 ) -> Code {
     ctx(&buyer(), reward + JOB_STORAGE_DEPOSIT.as_yoctonear(), START_NS);
     code_of(c.post_job(
+        "Fibonacci numbers".into(),
         "ipfs://spec".into(),
         runtime.into(),
         U128(reward),
@@ -58,11 +59,21 @@ fn post_job_rejects_each_bad_parameter() {
     assert_eq!(try_post(&mut c, REWARD, BOND, (1, 2), DEADLINE_NS, "py/1"), Code::JobBadRuntime);
 
     ctx(&buyer(), REWARD, START_NS);
-    let wrong_deposit =
-        c.post_job("x".into(), rt.into(), U128(REWARD), U128(BOND), 1, 2, U64(DEADLINE_NS), None);
+    let wrong_deposit = c.post_job(
+        "Fibonacci numbers".into(),
+        "x".into(),
+        rt.into(),
+        U128(REWARD),
+        U128(BOND),
+        1,
+        2,
+        U64(DEADLINE_NS),
+        None,
+    );
     assert_eq!(code_of(wrong_deposit), Code::JobWrongDeposit);
     ctx(&buyer(), REWARD + JOB_STORAGE_DEPOSIT.as_yoctonear(), START_NS);
     let long_uri = c.post_job(
+        "Fibonacci numbers".into(),
         "x".repeat(600),
         rt.into(),
         U128(REWARD),
@@ -73,6 +84,39 @@ fn post_job_rejects_each_bad_parameter() {
         None,
     );
     assert_eq!(code_of(long_uri), Code::JobUriTooLong);
+}
+
+#[test]
+fn a_job_needs_a_short_one_line_title() {
+    let mut c = contract();
+    for bad in [String::new(), " Fibonacci".into(), "Fib\nonacci".into(), "x".repeat(81)] {
+        ctx(&buyer(), REWARD + JOB_STORAGE_DEPOSIT.as_yoctonear(), START_NS);
+        let r = c.post_job(
+            bad,
+            "x".into(),
+            RUNTIME_JS_BOA_V1.into(),
+            U128(REWARD),
+            U128(BOND),
+            1,
+            2,
+            U64(DEADLINE_NS),
+            None,
+        );
+        assert_eq!(code_of(r), Code::JobBadTitle);
+    }
+    ctx(&buyer(), REWARD + JOB_STORAGE_DEPOSIT.as_yoctonear(), START_NS);
+    let ok = c.post_job(
+        "é".repeat(80),
+        "x".into(),
+        RUNTIME_JS_BOA_V1.into(),
+        U128(REWARD),
+        U128(BOND),
+        1,
+        2,
+        U64(DEADLINE_NS),
+        None,
+    );
+    assert_eq!(c.get_job(ok.unwrap()).unwrap().title, "é".repeat(80));
 }
 
 #[test]
@@ -169,7 +213,7 @@ fn score_counts_are_validated() {
 fn fee_is_capped_at_initialisation() {
     ctx(&owner(), 0, START_NS);
     assert_eq!(
-        Sphinx::new(owner(), verifier(), 2_001, true).err().map(|e| e.0.code()),
+        Sphinx::new(owner(), verifier(), 2_001, true, None, None).err().map(|e| e.0.code()),
         Some(Code::InitFeeTooHigh)
     );
 }
@@ -198,6 +242,7 @@ fn storage_deposits_cover_maximum_size_records() {
     let before = env::storage_usage();
     let job = c
         .post_job(
+            "Fibonacci numbers".into(),
             "u".repeat(MAX_URI_LEN),
             RUNTIME_JS_BOA_V1.into(),
             U128(REWARD),

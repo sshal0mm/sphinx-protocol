@@ -390,6 +390,19 @@ pub async fn online_checks(bundle: &Value) -> Result<Report, String> {
         !recorded.is_empty() && recorded.iter().all(|k| live.contains(k)),
         "every recorded grader key is in the contract's register",
     );
+    match bundle["code_sha256"].as_str() {
+        Some(recorded) => {
+            let live = code_sha256(&rpc, contract).await?;
+            r.push(
+                live == recorded,
+                format!(
+                    "the contract runs the recorded build {} (code SHA-256 on chain now)",
+                    short(recorded)
+                ),
+            );
+        }
+        None => r.skip("the deployed code (this recording predates code hashes)".to_owned()),
+    }
     let (config, _) = view_call(&rpc, contract, "get_config", &serde_json::json!({}), None).await?;
     r.push(config["allow_dev_keys"] == false, "the contract refuses dev keys now");
     let approved = &bundle["grader"]["approved_measurements"];
@@ -411,6 +424,27 @@ pub async fn online_checks(bundle: &Value) -> Result<Report, String> {
         ),
     );
     Ok(r)
+}
+
+/// The SHA-256 of the code `account` runs now, as lowercase hex (the chain
+/// reports it in base58).
+async fn code_sha256(rpc: &str, account: &str) -> Result<String, String> {
+    let body = serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": "query",
+        "params": { "request_type": "view_account", "finality": "final", "account_id": account } });
+    let reply: Value = reqwest::Client::new()
+        .post(rpc)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("view_account {account}: {e}"))?
+        .json()
+        .await
+        .map_err(|e| format!("view_account {account}: {e}"))?;
+    let b58 = reply["result"]["code_hash"]
+        .as_str()
+        .ok_or_else(|| format!("view_account {account}: no code hash"))?;
+    let bytes = bs58::decode(b58).into_vec().map_err(|e| format!("code hash {b58}: {e}"))?;
+    Ok(hex::encode(bytes))
 }
 
 /// Fetches Intel's collateral for the bundle's quote and OutLayer's approved

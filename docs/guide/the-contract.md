@@ -10,7 +10,7 @@ The escrow contract holds every reward and bond and pays only on a score signed 
 
 | From | Call | To | When |
 |---|---|---|---|
-| | `post_job` | Draft | terms within bounds, exact deposit |
+| | `post_job` | Draft | a title, terms within bounds, exact deposit |
 | Draft | `commit_suite` | Committed | by the buyer; freezes the grader key |
 | Committed | `record_suite_check` | Open | the reference passed in the enclave |
 | Committed | `record_suite_check` | Rejected | it did not; reward refunded |
@@ -33,6 +33,21 @@ The escrow contract holds every reward and bond and pays only on a score signed 
 - the contract tracks everything it owes, and `get_stats` reports whether its balance covers it
 - each payout is a transfer with a callback; if the transfer fails, the amount is kept for the receiver to `withdraw`
 - storage is paid by callers through fixed deposits, and a test proves they cover the largest possible records
+
+## the enclave proof
+
+On contracts with the enclave check, a signed result counts only once its grading run is proven on chain. Anyone calls `confirm_run` with OutLayer's attestation of the run, the run's output, its Intel TDX quote and Intel's collateral. The contract checks, before anything else:
+
+- the run used this job's grader build, started by the grader's caller, and read this job's hidden tests (`{buyer}/sphinx-job-{id}`)
+- the output is exactly the run's (its SHA-256 is in the attestation) and holds the signed result
+
+It then asks NEAR's DCAP verifier contract to check Intel's signature on the quote. In the callback it checks that the quote commits to the attestation, the platform is up to date, and the worker image is on OutLayer's approved list, which `sync_measurements` reads from OutLayer's registry contract. Only then does `record_score` or `record_suite_check` accept the matching signed result.
+
+| Call | Who | Does |
+|---|---|---|
+| `confirm_run` | anyone, about 250 Tgas | proves one grading run, as above |
+| `sync_measurements` | anyone | reads OutLayer's approved worker images |
+| `retire` | the owner, after the retire date, when the contract owes nothing | closes the contract and returns its whole balance to the owner |
 
 ## prepaid balances
 

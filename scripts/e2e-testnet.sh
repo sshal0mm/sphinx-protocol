@@ -77,7 +77,7 @@ echo "grader: enclave build ${GRADER_SHA:0:12}... run by $RELAYER"
 
 echo "== 1. buyer posts a job: 0.3 NEAR reward, 0.01 NEAR bond, 2 attempts per agent, 5 per job"
 DEADLINE=$(( ($(date +%s) + 3600) * 1000000000 ))
-JOB=$(near_call "buyer.$P" post_job "{\"spec_uri\":\"repo:$F/spec.md\",\"runtime\":\"js-boa/1\",\"reward\":\"$REWARD\",\"bond\":\"$BOND\",\"max_subs_per_agent\":2,\"max_subs_total\":5,\"deadline_ns\":\"$DEADLINE\"}" \
+JOB=$(near_call "buyer.$P" post_job "{\"title\":$(job_title "$F/spec.md"),\"spec_uri\":\"repo:$F/spec.md\",\"runtime\":\"js-boa/1\",\"reward\":\"$REWARD\",\"bond\":\"$BOND\",\"max_subs_per_agent\":2,\"max_subs_total\":5,\"deadline_ns\":\"$DEADLINE\"}" \
   "$(deposit "$REWARD+$JOB_DEPOSIT")" | tr -d '"')
 echo "   job $JOB"
 
@@ -130,7 +130,7 @@ bond_moved() {
 }
 for _ in 1 2 3 4 5 6; do bond_moved && break; sleep 3; done
 bond_moved || { echo "FAIL: agent-a's bond was not counted as lost" >&2; exit 1; }
-echo "   ok: agent-a's held bond was burned once the job was paid"
+echo "   ok: agent-a's held bond was kept by the contract once the job was paid"
 check "the contract holds at least what it owes" '.solvent' near_view get_stats
 echo "== 8. the buyer deletes the hidden suite now the job has ended"
 SPHINX_SIGNER_KEY="$(key_of "buyer.$P")" "$SPHINX" suite delete --job-id "$JOB" --buyer "buyer.$P" | sed -E 's/; tx .*//; s/^/   /'

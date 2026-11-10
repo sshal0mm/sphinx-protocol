@@ -18,6 +18,7 @@ name = "sphinx"
 path = "src/main.rs"
 
 [dependencies]
+bs58 = "0.5"
 sphinx-protocol = { path = "../sphinx-protocol" }
 sphinx-grader = { path = "../sphinx-grader" }
 sphinx-near = { path = "../sphinx-near" }
