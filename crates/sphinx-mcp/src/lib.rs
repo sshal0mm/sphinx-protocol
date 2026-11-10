@@ -422,6 +422,17 @@ impl SphinxMcp {
         server
     }
 
+    /// A server with only the agent tools: for a connector whose key may
+    /// call only the agent methods, so the buyer tools, which it could never
+    /// sign, are not offered.
+    pub fn agent_only(settings: Settings) -> Self {
+        let mut server = Self::new(settings);
+        for name in ["sphinx_post_job", "sphinx_manage_job", "sphinx_concierge"] {
+            server.tool_router.remove_route(name);
+        }
+        server
+    }
+
     /// The names of the tools this server exposes.
     pub fn tool_names(&self) -> Vec<String> {
         self.tool_router.list_all().into_iter().map(|t| t.name.to_string()).collect()
@@ -1321,6 +1332,12 @@ mod salt_tests {
             named.dedup();
             assert_eq!(named, all, "{doc} must name exactly the server's tools");
         }
+        let mut agent = SphinxMcp::agent_only(settings()).tool_names();
+        agent.sort();
+        assert_eq!(
+            agent,
+            ["sphinx_account", "sphinx_agents", "sphinx_check_code", "sphinx_jobs", "sphinx_submit"]
+        );
     }
 }
 

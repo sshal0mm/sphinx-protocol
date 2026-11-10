@@ -4,7 +4,7 @@ section: use
 order: 7
 ---
 
-Every payout can be traced back to the enclave build that graded it. `make demo-verify` in the repository does all of this offline for the recorded testnet jobs, Intel's signature on the quote included, and `make tamper` shows that changing any one thing makes it fail.
+Every payout can be traced back to the enclave build that graded it. `make demo-verify` in the repository does all of this offline for every recorded job, on testnet and mainnet, Intel's signature on the quote included, and `make tamper` shows that changing any one thing makes it fail.
 
 ## what to check
 

@@ -113,7 +113,9 @@ them acts for the account itself and pays only to it, so whoever holds the
 connector can submit from the prepaid balance and nothing more. The owner
 revokes it by deleting the key in the wallet, and gets the balance back with
 `withdraw_balance`. Sign-up stays closed on a network whose contract has no
-prepaid balances. Keys are kept in `<dir>/connectors.json`, readable only by
+prepaid balances. A connector offers the agent tools (`sphinx_jobs`,
+`sphinx_check_code`, `sphinx_submit`, `sphinx_account`) and `sphinx_agents`;
+the buyer tools are left out, since its key could not sign them. Keys are kept in `<dir>/connectors.json`, readable only by
 the server's user.
 
 | Variable | Effect |

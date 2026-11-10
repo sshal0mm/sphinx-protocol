@@ -260,7 +260,7 @@ impl Connect {
             max_spend: 0,
             pay_from_balance: true,
         };
-        let server = SphinxMcp::new(settings);
+        let server = SphinxMcp::agent_only(settings);
         let mut config = StreamableHttpServerConfig::default();
         if !self.hosts.is_empty() {
             config = config.with_allowed_hosts(

@@ -67,4 +67,4 @@ sphinx suite hash suite.json     # the same, and checks the rules
 
 ## the runtime
 
-`js-boa/1` runs plain JavaScript in a sandboxed engine with no network, no files and fixed limits. Each test gets a fresh sandbox, `Date` is a fixed clock and `Math.random` throws, so a run gives the same result every time. Budgets are in [grader limits](/docs/grader-limits).
+`js-boa/1` runs plain JavaScript in a sandboxed engine with no network, no files, no regular expressions and fixed limits. Each test gets a fresh sandbox, `Date` is a fixed clock and `Math.random` throws, so a run gives the same result every time. Budgets are in [grader limits](/docs/grader-limits).

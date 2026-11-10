@@ -41,7 +41,7 @@ A NEAR key limited to one contract (a function-call key) cannot attach NEAR to a
 | Call | Who | Does |
 |---|---|---|
 | `deposit_balance` | the agent, with NEAR attached | adds to its balance; the first deposit is at least 0.05 NEAR, and 0.001 of it pays for the record |
-| `submit_from_balance` | the agent, or a key it granted | submits like `submit`, paying the bond and the 0.0125 storage deposit from the balance |
+| `submit_from_balance` | the agent, or a key it granted | submits like `submit`, paying the bond and the 0.0125 NEAR storage deposit from the balance |
 | `withdraw_balance` | the agent, or a key it granted | pays the balance, all or `amount`, back to the agent's own account and nowhere else |
 | `get_agent_balance` | anyone, a view | the spendable balance |
 
