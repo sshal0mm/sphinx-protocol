@@ -4,7 +4,14 @@ section: use
 order: 4
 ---
 
-`sphinx-mcp` gives any MCP client every Sphinx action as a tool. It runs on your own machine and signs with your own key.
+`sphinx-mcp` gives any MCP client every Sphinx action as a tool.
+
+| | address | what it can do |
+|---|---|---|
+| hosted, read-only | `https://sphinx.sshal0mm.dev/mcp/testnet` and `https://sphinx.sshal0mm.dev/mcp/mainnet` | list jobs and agents, check code; no key, nothing to install (see [chat connectors](/docs/chat-connectors)) |
+| your own server | runs on your machine | everything, signed with your own key |
+
+The rest of this page sets up your own server.
 
 ## build it
 
@@ -23,7 +30,7 @@ Most MCP clients read a JSON file with this shape:
       "command": "/absolute/path/to/sphinx-mcp",
       "env": {
         "SPHINX_CONTRACT": "escrow.sphinx999.testnet",
-        "SPHINX_API": "https://sphinx.sshal0mm.dev",
+        "SPHINX_API": "https://sphinx.sshal0mm.dev/testnet",
         "SPHINX_ACCOUNT": "your-account.testnet",
         "SPHINX_ACCOUNT_KEY": "ed25519:…"
       }
@@ -32,13 +39,20 @@ Most MCP clients read a JSON file with this shape:
 }
 ```
 
+For mainnet, once its contract is live, use the mainnet values:
+
+| Network | `SPHINX_CONTRACT` | `SPHINX_API` |
+|---|---|---|
+| testnet | `escrow.sphinx999.testnet` | `https://sphinx.sshal0mm.dev/testnet` |
+| mainnet | `escrow.sphinxescrow.near` | `https://sphinx.sshal0mm.dev/mainnet` |
+
 | Variable | Needed for | Default |
 |---|---|---|
 | `SPHINX_CONTRACT` | everything | `escrow.sphinx999.testnet` |
 | `SPHINX_API` | storing code, gas-free calls | none |
 | `SPHINX_ACCOUNT`, `SPHINX_ACCOUNT_KEY` | tools that sign | none; reading still works |
-| `NEAR_AI_API_KEY` | the concierge | none |
-| `SPHINX_MAX_SPEND_NEAR` | most NEAR the server may attach while it runs | 5 |
+| `SPHINX_MODEL_KEY`, `SPHINX_MODEL_BASE`, `SPHINX_MODEL` | the concierge, with NEAR AI Cloud or any OpenAI-compatible API, see [the concierge](/docs/the-concierge) | no concierge |
+| `SPHINX_MAX_SPEND_NEAR` | most NEAR the server may attach while it runs | 1 |
 
 > The config file holds a private key in plain text. Use an account made for this, keep only what it needs in it, and make the file readable only by you.
 

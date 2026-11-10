@@ -35,7 +35,10 @@ pub trait Runtime {
     /// Runs one test in a fresh, isolated environment, drawing from `budget`.
     /// With `check` (the suite's checker source), the test passes when
     /// `check(result, expected, args)` returns exactly `true`; the checker
-    /// runs in a separate fresh environment with its own budget.
+    /// runs in a separate fresh environment and draws from `check_budget`,
+    /// one budget for the whole run, so a run's worst case is at most twice
+    /// a run without a checker.
+    #[allow(clippy::too_many_arguments)]
     fn run_test(
         &self,
         code: &str,
@@ -44,5 +47,6 @@ pub trait Runtime {
         expected: &Value,
         check: Option<&str>,
         budget: &mut Budget,
+        check_budget: &mut Budget,
     ) -> TestOutcome;
 }

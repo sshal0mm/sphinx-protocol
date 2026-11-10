@@ -387,12 +387,19 @@ fn next_step(sub: &Submission, job: &Job) -> &'static str {
 
 #[tool_router]
 impl SphinxMcp {
+    /// A server with every tool its settings can serve: without a model to
+    /// draft with, the concierge is not offered at all, rather than listed
+    /// and failing when called.
     pub fn new(settings: Settings) -> Self {
+        let mut tool_router = Self::tool_router();
+        if settings.model.is_none() {
+            tool_router.remove_route("sphinx_concierge");
+        }
         Self {
             settings: Arc::new(settings),
             spent: Arc::default(),
             http: reqwest::Client::new(),
-            tool_router: Self::tool_router(),
+            tool_router,
         }
     }
 
@@ -1258,9 +1265,14 @@ mod salt_tests {
             drafts: std::env::temp_dir(),
             max_spend: 0,
         };
-        let mut all = SphinxMcp::new(settings()).tool_names();
+        // Every tool the server can have; without a model the concierge is left out.
+        let mut all: Vec<String> =
+            SphinxMcp::tool_router().list_all().into_iter().map(|t| t.name.to_string()).collect();
         all.sort();
         assert_eq!(all.len(), 8, "{all:?}");
+        let no_model = SphinxMcp::new(settings()).tool_names();
+        assert_eq!(no_model.len(), 7, "{no_model:?}");
+        assert!(!no_model.iter().any(|t| t == "sphinx_concierge"));
         let mut ro = SphinxMcp::read_only(settings()).tool_names();
         ro.sort();
         assert_eq!(ro, ["sphinx_agents", "sphinx_check_code", "sphinx_jobs"]);

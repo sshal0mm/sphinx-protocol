@@ -15,7 +15,7 @@ Re-check it without keys: `make attacks-check` reads each transaction back from 
 | grader takeover | `buyer.sphinx999.testnet` | the buyer registers its own key as the grader | `SPHINX_E_AUTH_NOT_OWNER` | [`C2vLoFqovv…`](https://testnet.nearblocks.io/txns/C2vLoFqovvW947FQbitCoZLH2oBkGBb5ETWPzpDSLqAT) |
 | bond grab | `buyer.sphinx999.testnet` | the buyer reclaims agent-a's pending bond before its grading window ends | `SPHINX_E_RECLAIM_TOO_EARLY` | [`3G33qYPCYD…`](https://testnet.nearblocks.io/txns/3G33qYPCYDx7VD1VVpMxmoMLdtvAJH9fP9Sh2W129jkV) |
 | early refund | `buyer.sphinx999.testnet` | the buyer takes the reward back before the deadline | `SPHINX_E_REFUND_TOO_EARLY` | [`sE3bt7gfwu…`](https://testnet.nearblocks.io/txns/sE3bt7gfwuX2sCMhx8oy7hWjGyuxdY81EjvzvCPUE6U) |
-| cancel after work | `buyer.sphinx999.testnet` | the buyer cancels the job once an agent has submitted | `SPHINX_E_JOB_HAS_SUBMISSIONS` | [`HDwsdVhpBE…`](https://testnet.nearblocks.io/txns/HDwsdVhpBEejbrDfwXWpjpdYLxewXFwBQeY4pbFJ5pWL) |
+| cancel after work | `buyer.sphinx999.testnet` | the buyer cancels the job once an agent has submitted | `SPHINX_E_JOB_HAS_SUBMISSIONS` (rule since changed: cancelling is allowed while nothing passed and nothing is pending, with held bonds returned) | [`HDwsdVhpBE…`](https://testnet.nearblocks.io/txns/HDwsdVhpBEejbrDfwXWpjpdYLxewXFwBQeY4pbFJ5pWL) |
 | anonymous read | `anyone` | read agent-a's pending code with no signature | `HTTP 404` | – |
 | competitor read | `agent-b.sphinx999.testnet` | agent-b signs a request for agent-a's pending code | `HTTP 404` | – |
 | early buyer read | `buyer.sphinx999.testnet` | the buyer reads agent-a's code before paying | `HTTP 404` | – |

@@ -132,14 +132,19 @@ impl SphinxMcp {
             .ctx("var", "SPHINX_MODEL_KEY")
         })?;
         // The concierge writes the hidden tests and the reference solution, so
-        // the model provider sees them unless the model runs in a TEE.
-        if !model.is_private()
+        // the model's provider sees them unless the model runs in a TEE. Any
+        // OpenAI-compatible provider set with SPHINX_MODEL_BASE is the buyer's
+        // own choice and is used, with a note on the draft. Refused is only the
+        // case nobody chooses on purpose: NEAR AI's gateway routing the model
+        // to another provider instead of serving it in its TEE.
+        if model.is_gateway()
+            && !model.is_private()
             && !std::env::var("SPHINX_ALLOW_UNTRUSTED_MODEL").is_ok_and(|v| v == "1")
         {
             return Err(SphinxError::new(
                 Code::CliUsage,
                 format!(
-                    "{}; it would see the hidden tests it writes. Use NEAR AI Cloud, or set SPHINX_ALLOW_UNTRUSTED_MODEL=1 to accept that",
+                    "{}; it would see the hidden tests it writes. Pick a model NEAR AI serves in its TEE, or set SPHINX_ALLOW_UNTRUSTED_MODEL=1 to accept that",
                     model.privacy_note()
                 ),
             )
@@ -165,7 +170,10 @@ impl SphinxMcp {
         draft.reference = crate::with_salt(&draft.reference);
         let saved = Saved { draft, terms, recommended };
         save(&self.settings.drafts, &saved)?;
-        Ok(review(&saved))
+        let mut out = review(&saved);
+        // Who saw the hidden tests while they were written.
+        out["model"] = Value::String(model.privacy_note());
+        Ok(out)
     }
 
     pub(crate) async fn concierge_post(&self, p: ConciergePost) -> Result<Value, SphinxError> {

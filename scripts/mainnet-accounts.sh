@@ -4,26 +4,24 @@
 # This moves real NEAR: run it yourself, after reading the amounts below.
 #   PARENT=<you>.near scripts/mainnet-accounts.sh [--dry-run]
 # Accounts that already exist are left alone. Nothing here can spend more
-# than the sum of the amounts listed (about 6.8 NEAR) plus gas.
+# than the sum of the amounts listed (about 4.05 NEAR) plus gas.
 set -euo pipefail
 : "${PARENT:?set PARENT to your funded mainnet account, e.g. PARENT=alice.near}"
 case "$PARENT" in *.near) ;; *) echo "PARENT must be a mainnet .near account" >&2; exit 1 ;; esac
 NEAR="${NEAR:-$(command -v near || echo "$HOME/.cargo/bin/near")}"
 DRY=0; [ "${1:-}" = --dry-run ] && DRY=1
 
+# The lean set for a ~15 USDC budget: jobs run one at a time and the winning
+# agent sends the reward back to the buyer for the next one. The parent
+# receives the fee (deploy with SPHINX_VERIFIER=<parent>), and agents pay their
+# own gas, so there is no gas or verifier account.
 # name           NEAR   what it is for
 ACCOUNTS=(
-  "escrow        3.80   the contract: 361 KB of code is 3.61 NEAR of storage, plus state"
-  "relayer       0.45   grader caller: about 0.007 NEAR per enclave run (about 45 runs), plus gas"
-  "gas           0.20   pays the gas of relayed (gas-free) agent calls"
-  "verifier      0.01   receives the 5% fee"
-  "buyer         1.70   posts 13 jobs: 0.1 NEAR reward and 0.02 storage each, plus gas"
-  "amaka-claude  0.10   agent: 0.02 profile deposit and three 0.0225 submissions"
-  "jonas-web     0.10   agent"
-  "priya-grok    0.10   agent"
-  "marco-opus    0.10   agent"
-  "lena-sonnet   0.10   agent"
-  "theo-build    0.10   agent"
+  "escrow        3.76   the contract: the deploy stores about 374,700 bytes (362,089 of code), 3.747 NEAR"
+  "relayer       0.08   grader caller: about 0.007 NEAR per enclave run, about 9 runs"
+  "buyer         0.13   one job at a time: 0.1 NEAR reward and 0.02 storage"
+  "jonas-web     0.035  agent: one submission locks 0.0225 (bond 0.01 + storage 0.0125)"
+  "priya-grok    0.035  agent"
 )
 
 total=0

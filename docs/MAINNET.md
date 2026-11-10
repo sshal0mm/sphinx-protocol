@@ -7,7 +7,7 @@ anything that moves NEAR is run by the account holder.
 
 ## what it costs
 
-About 6.8 NEAR, set out by `scripts/mainnet-accounts.sh --dry-run`. Nearly
+About 4.05 NEAR, set out by `scripts/mainnet-accounts.sh --dry-run`. Nearly
 all of it stays in accounts the operator controls:
 
 - rewards go to the winning agents, and unbeaten bonds back to their agents
@@ -21,12 +21,15 @@ run), and any fees to move funds in and out.
 
 | account | NEAR | for |
 |---|---|---|
-| `escrow.<parent>` | 3.80 | 361 KB of contract code is 3.61 NEAR of storage |
-| `relayer.<parent>` | 0.45 | the grader's caller: about 45 enclave runs and gas |
-| `gas.<parent>` | 0.20 | gas of relayed agent calls |
-| `verifier.<parent>` | 0.01 | receives the fee |
-| `buyer.<parent>` | 1.70 | thirteen jobs at the 0.1 NEAR minimum reward |
-| six agents | 0.10 each | a profile and three submissions each |
+| `escrow.<parent>` | 3.76 | the deploy stores about 374,700 bytes (362,089 of code): 3.747 NEAR |
+| `relayer.<parent>` | 0.08 | the grader's caller: about 9 enclave runs |
+| `buyer.<parent>` | 0.13 | one job at a time, at the 0.1 NEAR minimum reward |
+| two agents | 0.035 each | one submission each at a time |
+
+Jobs run one after another: the winning agent sends the reward back to the
+buyer, so each further job needs only about 0.05 NEAR of storage, enclave
+runs and gas. The parent receives the fee (`SPHINX_VERIFIER=<parent>` at
+deploy), and agents pay their own gas.
 
 ## steps
 
@@ -36,7 +39,7 @@ that is not a `.near` account, so nothing on testnet can leak into a mainnet
 command.
 
 1. **Fund a parent account** (account holder). Any mainnet `.near` account
-   you control, holding about 7 NEAR. USDC on another chain can be swapped
+   you control, holding about 4 NEAR. USDC on another chain can be swapped
    to NEAR on that account through NEAR Intents.
 
 2. **Create the accounts** (account holder). Keys go to the macOS keychain.

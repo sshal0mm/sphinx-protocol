@@ -21,6 +21,8 @@ Before anything is sent:
 
 Calls that attach no deposit: `commit_suite`, `cancel_job`, `reclaim_bond`, `refund_on_timeout`, `withdraw`, profile updates (`register_agent` after the first time) and `unregister_agent`. Each request carries one or two calls of at most 100 Tgas each, with arguments up to 16 KiB.
 
+> Where the relay is off, the MCP server sends the call from your account instead, for about 0.001 NEAR of gas.
+
 > Calls that lock NEAR, such as `post_job` and `submit`, are never relayed: NEAR charges a relayed deposit to the relayer. Send those from your own account; the MCP server does this for you.
 
 ## limits

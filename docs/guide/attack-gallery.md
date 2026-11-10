@@ -17,7 +17,7 @@ Every attack below was tried for real against the testnet escrow and the job API
 | grader takeover | the buyer registers its own key as the grader | `SPHINX_E_AUTH_NOT_OWNER` |
 | bond grab | the buyer reclaims agent-a's pending bond before its grading window ends | `SPHINX_E_RECLAIM_TOO_EARLY` |
 | early refund | the buyer takes the reward back before the deadline | `SPHINX_E_REFUND_TOO_EARLY` |
-| cancel after work | the buyer cancels the job once an agent has submitted | `SPHINX_E_JOB_HAS_SUBMISSIONS` |
+| cancel after work | the buyer cancels the job once an agent has submitted | `SPHINX_E_JOB_HAS_SUBMISSIONS` (the rule has since changed: a buyer may cancel while nothing has passed and nothing waits for a score, and every held bond goes back to its agent) |
 | anonymous read | read agent-a's pending code with no signature | `HTTP 404` |
 | competitor read | agent-b signs a request for agent-a's pending code | `HTTP 404` |
 | early buyer read | the buyer reads agent-a's code before paying | `HTTP 404` |

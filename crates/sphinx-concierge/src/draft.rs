@@ -299,6 +299,22 @@ fn draft_id(spec: &str, suite: &str, reference: &str) -> String {
     hex::encode(&h.finalize()[..8])
 }
 
+/// Whether most inputs carry a string that is really JSON (an object or array
+/// written as text) or a line break written as a literal backslash-n.
+fn looks_double_encoded(inputs: &[Vec<Value>]) -> bool {
+    let suspicious = |v: &Value| match v {
+        Value::String(s) => {
+            let t = s.trim();
+            let json = (t.starts_with('{') || t.starts_with('['))
+                && serde_json::from_str::<Value>(t).is_ok_and(|j| j.is_object() || j.is_array());
+            json || (s.contains("\\n") && !s.contains('\n'))
+        }
+        _ => false,
+    };
+    let flagged = inputs.iter().filter(|args| args.iter().any(suspicious)).count();
+    !inputs.is_empty() && flagged * 2 > inputs.len()
+}
+
 /// Drafts jobs with a model.
 #[derive(Debug)]
 pub struct Concierge<'a, M: Model> {
@@ -321,6 +337,7 @@ impl<'a, M: Model> Concierge<'a, M> {
         progress: &mut impl FnMut(Progress),
     ) -> Result<(Written, Vec<Value>), SphinxError> {
         let mut last = String::from("the model never answered");
+        let mut nudged = false;
         for round in 1..=WRITE_ROUNDS {
             progress(Progress::Writing { round });
             let reply = self.ask(conversation).await?;
@@ -346,6 +363,22 @@ impl<'a, M: Model> Concierge<'a, M> {
                     format!("{} ended in {}", call_text(&written.entry, args), describe(r))
                 })
                 .collect();
+            // Models often write an object input as JSON text, or a line break as
+            // a literal backslash-n, so most hidden tests only exercise the
+            // invalid-input path and both solvers agree on it. Ask once; a task
+            // that really takes JSON text answers the same way again.
+            if failures.is_empty() && !nudged && looks_double_encoded(&written.inputs) {
+                nudged = true;
+                conversation.push(Message::user(
+                    "Most of your inputs are strings that hold JSON (an object or array written as text) \
+                     or contain a backslash followed by n instead of a real line break. Unless the task \
+                     truly takes JSON text or literal backslashes, pass objects and arrays as JSON values \
+                     and write line breaks as real newlines (\\n inside the JSON string). If the inputs are \
+                     right as they are, reply with the same JSON object again."
+                        .to_owned(),
+                ));
+                continue;
+            }
             if failures.is_empty() {
                 let outputs = results
                     .into_iter()
@@ -548,6 +581,17 @@ fn review_prompt(entry: &str, differences: &[Difference]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn double_encoded_inputs_are_noticed() {
+        let json_text = vec![vec![json!("{\"name\":\"a\"}")], vec![json!("[1,2]")], vec![json!({"name": "a"})]];
+        assert!(looks_double_encoded(&json_text));
+        let escaped = vec![vec![json!("a,b\\n1,2")], vec![json!("x\\ny")]];
+        assert!(looks_double_encoded(&escaped));
+        let fine = vec![vec![json!({"name": "a"})], vec![json!("a,b\n1,2")], vec![json!("{not json")]];
+        assert!(!looks_double_encoded(&fine));
+        assert!(!looks_double_encoded(&[]));
+    }
     use sphinx_model::Scripted;
 
     fn written(reference: &str, description: &str) -> String {

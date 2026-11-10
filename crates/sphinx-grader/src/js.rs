@@ -246,6 +246,7 @@ impl Runtime for JsBoaRuntime {
         expected: &Value,
         check: Option<&str>,
         budget: &mut Budget,
+        check_budget: &mut Budget,
     ) -> TestOutcome {
         if budget.is_spent() {
             return TestOutcome::Fail;
@@ -259,7 +260,7 @@ impl Runtime for JsBoaRuntime {
             Ok(Some(actual)) => match check {
                 None if values_equal(expected, &actual) => TestOutcome::Pass,
                 None => TestOutcome::Fail,
-                Some(src) => self.checked(src, actual, expected, args),
+                Some(src) => self.checked(src, actual, expected, args, check_budget),
             },
             Ok(None) | Err(Stop::Threw) => TestOutcome::Fail,
             Err(Stop::Aborted) => TestOutcome::Aborted,
@@ -268,17 +269,27 @@ impl Runtime for JsBoaRuntime {
 }
 
 impl JsBoaRuntime {
-    /// Runs the suite's checker on a submission's result in a fresh sandbox
-    /// with its own budget, so the submission can neither reach the checker
-    /// nor spend its compute. Anything but a returned `true` (a throw, a
-    /// resource limit, any other value) fails the test.
-    fn checked(&self, src: &str, actual: Value, expected: &Value, args: &[Value]) -> TestOutcome {
-        let mut budget = Budget::new(crate::limits::RUN_POLLS);
-        let Ok((mut ctx, snapshot)) = self.load(src, "check", &mut budget) else {
+    /// Runs the suite's checker on a submission's result in a fresh sandbox,
+    /// drawing from the run's checker budget, so the submission can neither
+    /// reach the checker nor spend its compute. Anything but a returned
+    /// `true` (a throw, a resource limit, a spent budget, any other value)
+    /// fails the test.
+    fn checked(
+        &self,
+        src: &str,
+        actual: Value,
+        expected: &Value,
+        args: &[Value],
+        budget: &mut Budget,
+    ) -> TestOutcome {
+        if budget.is_spent() {
+            return TestOutcome::Fail;
+        }
+        let Ok((mut ctx, snapshot)) = self.load(src, "check", budget) else {
             return TestOutcome::Fail;
         };
         let inputs = [actual, expected.clone(), Value::Array(args.to_vec())];
-        match Self::call_entry(&mut ctx, &snapshot, "check", &inputs, &mut budget) {
+        match Self::call_entry(&mut ctx, &snapshot, "check", &inputs, budget) {
             Ok(Some(Value::Bool(true))) => TestOutcome::Pass,
             _ => TestOutcome::Fail,
         }
@@ -292,7 +303,8 @@ mod tests {
     fn outcome(code: &str) -> TestOutcome {
         let rt = JsBoaRuntime { epoch_ms: 0 };
         let mut budget = Budget::new(crate::limits::RUN_POLLS);
-        rt.run_test(code, "solve", &[], &serde_json::json!(1), None, &mut budget)
+        let mut check_budget = Budget::new(crate::limits::RUN_POLLS);
+        rt.run_test(code, "solve", &[], &serde_json::json!(1), None, &mut budget, &mut check_budget)
     }
 
     #[cfg(feature = "evaluate")]

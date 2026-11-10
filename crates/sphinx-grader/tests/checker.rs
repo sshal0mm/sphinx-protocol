@@ -136,3 +136,19 @@ fn an_empty_or_oversized_check_is_refused_at_intake() {
         assert!(local_score(&s.to_string(), "function solve(){ return 1 }", 0).is_err());
     }
 }
+
+#[test]
+fn a_checker_shares_one_budget_across_the_run() {
+    let tests: Vec<Value> = (0..32).map(|i| json!({ "args": [i], "expected": i })).collect();
+    let tests = Value::Array(tests);
+    // A light checker passes all 32 tests on the shared budget.
+    let light = "function check(r, e){ return r === e }";
+    assert_eq!(score(&suite(light, &tests), "function solve(n){ return n }"), 32);
+    // A checker that burns its whole per-call allowance on every test cannot
+    // stretch the run: the shared budget runs out and the remaining tests fail.
+    let heavy = "function burn(){ var s = 0; for (var i = 0; i < 19000; i++) { s += i % 7 } return s }
+                 function check(r, e){ for (var k = 0; k < 15000; k++) { burn() } return true }";
+    let started = std::time::Instant::now();
+    assert_eq!(score(&suite(heavy, &tests), "function solve(n){ return n }"), 0);
+    assert!(started.elapsed() < std::time::Duration::from_secs(120), "the run must stay bounded");
+}

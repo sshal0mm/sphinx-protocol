@@ -404,6 +404,10 @@ fn run_suite(runtime: &dyn Runtime, suite: &Suite, code: &str) -> (u32, u32, Opt
         );
     }
     let (mut passed, mut aborts) = (0u32, 0u32);
+    // One budget for the suite's checker across the whole run, the same size
+    // as the submission's, so a checker cannot push a run past the enclave's
+    // instruction allowance.
+    let mut check_budget = Budget::new(RUN_POLLS);
     for test in &suite.tests {
         if aborts >= MAX_ABORTS {
             break;
@@ -415,6 +419,7 @@ fn run_suite(runtime: &dyn Runtime, suite: &Suite, code: &str) -> (u32, u32, Opt
             &test.expected,
             suite.check.as_deref(),
             &mut budget,
+            &mut check_budget,
         ) {
             TestOutcome::Pass => passed += 1,
             TestOutcome::Fail => {}

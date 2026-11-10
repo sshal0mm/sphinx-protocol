@@ -60,6 +60,12 @@ fields are rejected.
  "tests": [{"args": [10], "expected": 55}]}
 ```
 
+An optional `check` field holds JavaScript defining `check(result, expected,
+args)`. With it, a test passes when `check` returns exactly `true`, in its own
+fresh realm on one budget for the whole run (ADR 0014); without it, results
+compare by JSON value equality. Suites without `check` hash and grade exactly
+as before.
+
 Intake rules (checked by the grader and by `sphinx suite check`):
 
 | Rule | Limit | Error |
@@ -70,6 +76,7 @@ Intake rules (checked by the grader and by `sphinx suite check`):
 | numbers | finite; integers within ±(2^53 − 1) | `SPHINX_E_GRADER_SUITE_UNREPRESENTABLE` |
 | object keys | no `__proto__` | `SPHINX_E_GRADER_SUITE_UNREPRESENTABLE` |
 | entry | plain identifier, not a keyword or built-in | `SPHINX_E_GRADER_ENTRY_INVALID`, `..._RESERVED` |
+| check | optional; 1 byte to 64 KiB | `SPHINX_E_GRADER_SUITE_MALFORMED` |
 
 Errors never quote suite contents.
 

@@ -32,6 +32,10 @@ Inside the enclave the grader receives them as environment variables. Any other 
 - compute is counted in interpreter cycles, not time
 - return values are read by a helper created before the submitted code runs, and compared in Rust
 
+## check functions
+
+A suite may carry a `check` function written by the buyer, for work with no single right answer: a test then passes when `check(result, expected, args)` returns exactly `true`. It runs in its own fresh realm after the submission returns, never in the submission's, and draws from its own budget, so the submission cannot reach or starve it. A strategy is scored on data that travels in `expected`, which the submission never receives. See [suite format](/docs/suite-format).
+
 ## attestation
 
 Every OutLayer run comes with an Intel TDX quote that commits to its input, output, build hash and caller. See [checking a result](/docs/checking-a-result).

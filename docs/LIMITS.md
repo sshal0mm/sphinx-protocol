@@ -34,6 +34,10 @@ minimum fuel found by bisection:
 | A test stopped by the per-frame loop limit | ≈ 17 million |
 
 Worst case per run: 32 × 7.7M + 1,536 × 270k + 4 × 17M ≈ 730 million.
+A suite with a `check` function adds a checker realm per test and one more
+budget of 1,536 polls for the whole run, shared by every checker call
+(ADR 0014): at most about another 730 million, so ≈ 1.46 billion, still under
+the 2 billion allowance.
 
 ## Corpus (`make test-wasm`, 32 tests each, allowance 2e9)
 

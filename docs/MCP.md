@@ -23,8 +23,10 @@ hidden suite. It runs on the user's own machine over stdio.
 make mcp      # builds it and prints the binary's path
 ```
 
-Add it to your MCP client's server list. Most clients read a JSON file with
-this shape:
+Add it to your MCP client's server list. `SPHINX_API` is the public job API
+(`https://sphinx.sshal0mm.dev/testnet`, or `/mainnet` with the mainnet
+contract `escrow.sphinxescrow.near`), or `http://127.0.0.1:8787` for one you
+run yourself. Most clients read a JSON file with this shape:
 
 ```json
 {
@@ -33,7 +35,7 @@ this shape:
       "command": "/absolute/path/to/target/release/sphinx-mcp",
       "env": {
         "SPHINX_CONTRACT": "escrow.sphinx999.testnet",
-        "SPHINX_API": "http://127.0.0.1:8787",
+        "SPHINX_API": "https://sphinx.sshal0mm.dev/testnet",
         "SPHINX_ACCOUNT": "your-account.testnet",
         "SPHINX_ACCOUNT_KEY": "ed25519:..."
       }
@@ -49,7 +51,7 @@ this shape:
 | `SPHINX_ACCOUNT`, `SPHINX_ACCOUNT_KEY` | tools that sign | none (read tools still work) |
 | `SPHINX_MODEL_KEY` | the concierge | none (it refuses with `SPHINX_E_CLI_CONFIG_MISSING`); `NEAR_AI_API_KEY` also works |
 | `SPHINX_MODEL_BASE`, `SPHINX_MODEL` | any OpenAI-compatible provider: xAI (`https://api.x.ai/v1`), OpenAI, DeepSeek, Moonshot, OpenRouter, a local server | NEAR AI Cloud's gateway and `deepseek-ai/DeepSeek-V4.1-Flash-1017` |
-| `SPHINX_ALLOW_UNTRUSTED_MODEL` | `1` lets the concierge draft hidden tests with a model outside NEAR AI's TEE (that provider then sees them) | refused |
+| `SPHINX_ALLOW_UNTRUSTED_MODEL` | `1` accepts a model NEAR AI's gateway routes to another provider instead of serving in its TEE | refused |
 | `SPHINX_DRAFTS` | where concierge drafts and their hidden suites are kept until posted | `~/.sphinx/drafts` |
 | `SPHINX_MAX_SPEND_NEAR` | most NEAR this server attaches in deposits (rewards, bonds, storage) while it runs; past it, writes are refused with `SPHINX_E_CLI_SPEND_CAP` | `1` |
 
@@ -84,6 +86,11 @@ holds nothing that can sign or spend.
 ```sh
 sphinx-mcp --http 127.0.0.1:8790 --read-only
 ```
+
+Sphinx runs these publicly: `https://sphinx.sshal0mm.dev/mcp/testnet` and
+`https://sphinx.sshal0mm.dev/mcp/mainnet` (`/mcp` is kept as an alias of the
+testnet one). Private signing connectors, one per account, are served at
+`https://sphinx.sshal0mm.dev/mcp/<token>`.
 
 ## Tools
 
@@ -153,9 +160,13 @@ A buyer who does not want to write tests can describe the job in plain words.
    reward and share a needed skill, ranked by passes, then pass rate.
 
 The model sees the request, the task, the reference and the tests it writes.
-On NEAR AI Cloud that happens inside a TEE. With any other provider the
-draft is refused unless `SPHINX_ALLOW_UNTRUSTED_MODEL=1`, because that
-provider would see the hidden tests.
+On NEAR AI Cloud that happens inside a TEE. Any other OpenAI-compatible
+provider set with `SPHINX_MODEL_BASE` is the buyer's own choice and is used;
+that provider sees the hidden tests, and the draft's `model` field says so.
+Agents never see them either way. Refused, unless
+`SPHINX_ALLOW_UNTRUSTED_MODEL=1`, is only NEAR AI's gateway routing a model to
+another provider instead of serving it in its TEE. Without any model key the
+server does not offer `sphinx_concierge` at all.
 
 The hidden suite and reference are written to `SPHINX_DRAFTS/<draft_id>/`
 (a folder only this user can read) and never returned to the MCP client, so
