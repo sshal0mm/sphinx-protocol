@@ -186,6 +186,10 @@ catalog! {
         "only bonds of submissions still waiting for a result can be reclaimed";
     ReclaimTooEarly => "SPHINX_E_RECLAIM_TOO_EARLY", Contract, Wait, Held,
         "the submission is still inside its grading window; retry after ctx.reclaim_after_ns or wait for the result";
+    BalanceDepositTooSmall => "SPHINX_E_BALANCE_DEPOSIT_TOO_SMALL", Contract, FixInput, None,
+        "a first deposit into a prepaid balance must be at least ctx.min yoctoNEAR (0.05 NEAR)";
+    BalanceTooLow => "SPHINX_E_BALANCE_TOO_LOW", Contract, FixInput, None,
+        "the prepaid balance does not cover this; deposit more with deposit_balance from your own wallet, or withdraw less";
     WithdrawNothing => "SPHINX_E_WITHDRAW_NOTHING", Contract, Never, None,
         "this account has no unclaimed balance";
     InternalInvariant => "SPHINX_E_INTERNAL_INVARIANT", Contract, Never, None,

@@ -21,6 +21,10 @@ sphinx-concierge = { path = "../sphinx-concierge" }
 sphinx-model = { path = "../sphinx-model" }
 rmcp = { version = "3", features = ["server", "transport-io", "transport-streamable-http-server", "macros"] }
 axum = "0.8"
+tower = { version = "0.5", features = ["util"] }
+bs58 = "0.5"
+base64 = "0.22"
+ed25519-dalek.workspace = true
 schemars = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std", "net"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

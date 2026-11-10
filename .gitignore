@@ -21,3 +21,4 @@ data/
 # Server-only deploy secrets and data
 deploy/.env
 deploy/data/
+deployments/*.wasm

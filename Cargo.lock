@@ -5457,6 +5457,9 @@ name = "sphinx-mcp"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "base64 0.22.1",
+ "bs58 0.5.1",
+ "ed25519-dalek",
  "rand 0.8.8",
  "reqwest 0.12.28",
  "rmcp",
@@ -5469,6 +5472,7 @@ dependencies = [
  "sphinx-near",
  "sphinx-protocol",
  "tokio",
+ "tower",
 ]
 
 [[package]]

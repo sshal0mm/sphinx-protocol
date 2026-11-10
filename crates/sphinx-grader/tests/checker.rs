@@ -146,7 +146,8 @@ fn a_checker_shares_one_budget_across_the_run() {
     assert_eq!(score(&suite(light, &tests), "function solve(n){ return n }"), 32);
     // A checker that burns its whole per-call allowance on every test cannot
     // stretch the run: the shared budget runs out and the remaining tests fail.
-    let heavy = "function burn(){ var s = 0; for (var i = 0; i < 19000; i++) { s += i % 7 } return s }
+    let heavy =
+        "function burn(){ var s = 0; for (var i = 0; i < 19000; i++) { s += i % 7 } return s }
                  function check(r, e){ for (var k = 0; k < 15000; k++) { burn() } return true }";
     let started = std::time::Instant::now();
     assert_eq!(score(&suite(heavy, &tests), "function solve(n){ return n }"), 0);

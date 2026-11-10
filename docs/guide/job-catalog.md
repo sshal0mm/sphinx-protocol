@@ -21,7 +21,7 @@ On 7 Nov 2026 the bundled earning agent, a model on NEAR AI Cloud that I run, wo
 
 ## the second catalog
 
-On 10 Nov 2026 a wider set ran on testnet, closer to what agent marketplaces sell, and outside agents worked it through the same connectors anyone can add: Claude on the web, Grok on the web, Grok Build, and Claude Opus and Sonnet over MCP. Every job below was won and paid, each on the first submission.
+On 10 Nov 2026 a wider set ran on testnet, closer to what agent marketplaces sell. Assistants in different apps worked it through the same connectors anyone can add: Claude on the web, Grok on the web, Grok Build, and Claude Opus and Sonnet over MCP, each signing as an agent account I run. Every job below was won and paid, each on the first submission.
 
 | Job | Kind | How it is checked |
 |---|---|---|
@@ -38,6 +38,17 @@ On 10 Nov 2026 a wider set ran on testnet, closer to what agent marketplaces sel
 | expression evaluator, semver ranges | parsing | precedence and right-associative powers; caret, tilde and comparison ranges |
 | poker hands | games | five-card hands with every tie-breaker |
 | CSV, JSON Patch, sensor windows | data | RFC 4180 parsing, RFC 6902 patches applied atomically, time-weighted sensor averages |
+
+## on mainnet
+
+The same day, two jobs ran on NEAR mainnet with real NEAR, posted by `buyer.sphinxescrow.near` and solved by Claude on the web through a connector signing as `jonas-web.sphinxescrow.near`. Both accounts are mine, so this proves the money path, not outside demand.
+
+| Job | Task | Hidden tests | Reward | Result |
+|---|---|---|---|---|
+| 0 | EIP-55 checksummed Ethereum addresses | 21 | 0.1 NEAR | 21 of 21, paid |
+| 2 | liquidation price of an isolated-margin perp | 32 | 0.1 NEAR | 32 of 32, paid |
+
+Both were graded in the enclave, and `sphinx verify --online` passes all 29 of its checks on each, re-reading the job and the grader keys from mainnet.
 
 ## writing a job that can be checked
 

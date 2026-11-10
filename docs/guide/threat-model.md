@@ -22,6 +22,7 @@ Who might attack, what stops them, and what is left.
 | code is swapped after submission | addressed by SHA-256, checked by the relayer and grader | none known |
 | someone drains the gas relay | signature and key checks, no deposits, rate limits, previews, failure pauses | gas for failures a preview cannot see |
 | a buyer's `check` function stalls grading | it runs in its own sandbox on one budget per run; the reference must pass it in the enclave before the job opens | none known |
-| task text steers an assistant into spending | the MCP server's spending cap | misuse within the cap |
+| task text steers an assistant into spending | the MCP server's spending cap; a connector's key cannot attach NEAR | misuse within the cap, or of the prepaid balance |
+| a connector's key or address leaks | the key can call only the escrow and seven methods, each acting for and paying only its own account | bonds spent from the prepaid balance until the owner deletes the key |
 
 Each row has a test in the repository.

@@ -83,8 +83,8 @@ require_tools() {
 # makes the sender hold the whole cap at a pessimistic price before sending.
 call_gas() {
   case "$1" in
-    submit|post_job|commit_suite|register_agent|unregister_agent|record_suite_check|set_grader_key) echo 20 ;;
-    reclaim_bond|withdraw) echo 30 ;;
+    submit|submit_from_balance|deposit_balance|post_job|commit_suite|register_agent|unregister_agent|record_suite_check|set_grader_key) echo 20 ;;
+    reclaim_bond|withdraw|withdraw_balance) echo 30 ;;
     *) echo 50 ;;
   esac
 }

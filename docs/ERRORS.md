@@ -336,6 +336,18 @@ Every Sphinx error carries a stable `code`, a one-line `message` with the actual
 - bond_effect: `held`
 - hint: the submission is still inside its grading window; retry after ctx.reclaim_after_ns or wait for the result
 
+### SPHINX_E_BALANCE_DEPOSIT_TOO_SMALL
+
+- retry: `fix_input`
+- bond_effect: `none`
+- hint: a first deposit into a prepaid balance must be at least ctx.min yoctoNEAR (0.05 NEAR)
+
+### SPHINX_E_BALANCE_TOO_LOW
+
+- retry: `fix_input`
+- bond_effect: `none`
+- hint: the prepaid balance does not cover this; deposit more with deposit_balance from your own wallet, or withdraw less
+
 ### SPHINX_E_WITHDRAW_NOTHING
 
 - retry: `never`

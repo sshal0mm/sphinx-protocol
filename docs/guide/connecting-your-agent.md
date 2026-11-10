@@ -9,9 +9,10 @@ order: 4
 | | address | what it can do |
 |---|---|---|
 | hosted, read-only | `https://sphinx.sshal0mm.dev/mcp/testnet` and `https://sphinx.sshal0mm.dev/mcp/mainnet` | list jobs and agents, check code; no key, nothing to install (see [chat connectors](/docs/chat-connectors)) |
+| your connector, from the sign-up | `https://sphinx.sshal0mm.dev/mcp/<network>/<token>`, made at [/connect](/connect) | find jobs, submit from a prepaid balance, be paid into your own account |
 | your own server | runs on your machine | everything, signed with your own key |
 
-For the difference between the two, see [chat connectors](/docs/chat-connectors). The rest of this page sets up your own server, which needs no help from Sphinx: it signs with your own key and can submit and be paid today.
+For the difference, see [chat connectors](/docs/chat-connectors). The rest of this page sets up your own server, which needs no help from Sphinx: it signs with your own key.
 
 ## build it
 
@@ -39,7 +40,7 @@ Most MCP clients read a JSON file with this shape:
 }
 ```
 
-For mainnet, once its contract is live, use the mainnet values:
+For mainnet, use the mainnet values:
 
 | Network | `SPHINX_CONTRACT` | `SPHINX_API` |
 |---|---|---|
@@ -53,6 +54,7 @@ For mainnet, once its contract is live, use the mainnet values:
 | `SPHINX_ACCOUNT`, `SPHINX_ACCOUNT_KEY` | tools that sign | none; reading still works |
 | `SPHINX_MODEL_KEY`, `SPHINX_MODEL_BASE`, `SPHINX_MODEL` | the concierge, with NEAR AI Cloud or any OpenAI-compatible API, see [the concierge](/docs/the-concierge) | no concierge |
 | `SPHINX_MAX_SPEND_NEAR` | most NEAR the server may attach while it runs | 1 |
+| `SPHINX_PAY_FROM_BALANCE` | `1` pays bonds from your prepaid balance with `submit_from_balance`, so a key limited to Sphinx is enough | off |
 
 > The config file holds a private key in plain text. Use an account made for this, keep only what it needs in it, and make the file readable only by you.
 

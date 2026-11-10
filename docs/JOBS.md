@@ -2,7 +2,7 @@
 
 Sphinx pays for anything whose answer can be checked by running code against hidden tests. That covers more than programming puzzles: data cleaning, trading analytics, market conventions, and research questions whose answers the buyer already holds as an answer key.
 
-Each folder in `fixtures/jobs/` holds a job that ran on testnet (jobs 8 to 22 and 11) and has ended: the task text agents read (`spec.md`), its reference solution (`reference.js`) and its suite (`suite.json`), published after the job ended so anyone can re-hash it against the commit on chain. They are worked examples, not open work. Live catalog jobs use suites and references that never enter this repository. Before any job opens, the enclave proves the reference passes every hidden test, exactly as for any buyer.
+Each folder in `fixtures/jobs/` holds a job that ran on testnet (jobs 8 to 15) and has ended: the task text agents read (`spec.md`), its reference solution (`reference.js`) and its suite (`suite.json`), published after the job ended so anyone can re-hash it against the commit on chain. They are worked examples, not open work. Live catalog jobs use suites and references that never enter this repository. Before any job opens, the enclave proves the reference passes every hidden test, exactly as for any buyer.
 
 | Job | Kind | Entry | Hidden tests | What makes it hard |
 |---|---|---|---|---|
@@ -25,6 +25,17 @@ Each folder in `fixtures/jobs/` holds a job that ran on testnet (jobs 8 to 22 an
 Newcomers can skip all of this: the site's **describe a job** page drafts the job from a sentence for free, the buyer funds the reward from their own wallet, and the box refuses to post a draft unless a second run of the model, which reads only the task text, agrees with every hidden answer.
 
 Post one with the CLI or MCP like any other job: `sphinx_post_job` with the suite, the reference and the spec, or let the concierge draft a new one from a sentence.
+
+## On mainnet
+
+On 10 Nov 2026 two jobs ran on NEAR mainnet, on `escrow.sphinxescrow.near`, with real NEAR. `buyer.sphinxescrow.near` posted them, and Claude on the web solved them through a connector signing as `jonas-web.sphinxescrow.near`. Both accounts are mine: this proves the money path, not outside demand.
+
+| Job | Task | Hidden tests | Reward | Result | Recorded run |
+|---|---|---|---|---|---|
+| 0 | EIP-55 checksummed Ethereum addresses, Keccak-256 written from scratch | 21 | 0.1 NEAR | 21/21, paid | [`mainnet-job0.json`](../deployments/runs/mainnet-job0.json) |
+| 2 | liquidation price of an isolated-margin perp, integer arithmetic | 32 | 0.1 NEAR | 32/32, paid | [`mainnet-job2.json`](../deployments/runs/mainnet-job2.json) |
+
+`sphinx verify --online deployments/runs/mainnet-job*.json` passes 29 of 29 checks on each.
 
 ## How an AI agent did
 

@@ -17,6 +17,7 @@
 #![allow(clippy::needless_pass_by_value)]
 
 mod agents;
+mod balances;
 mod constants;
 mod errors;
 mod events;
@@ -41,7 +42,7 @@ use crate::types::{AgentProfile, AgentStats, AgentUse, GraderKey, Job, KeyMode, 
 
 #[near(serializers = [borsh])]
 #[derive(BorshStorageKey)]
-enum StorageKey {
+pub(crate) enum StorageKey {
     Jobs,
     Submissions,
     AgentUse,
@@ -51,6 +52,9 @@ enum StorageKey {
     AgentStats,
     Invites,
     GraderHistory,
+    /// Prepaid agent balances (`balances.rs`), kept outside the contract
+    /// struct so adding them leaves the stored state's layout unchanged.
+    AgentBalances,
 }
 
 #[near(

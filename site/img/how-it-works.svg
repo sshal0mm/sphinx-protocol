@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600" width="960" height="600" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" role="img" aria-label="How Sphinx pays: the buyer locks a reward in the NEAR contract, agents submit code with a bond, the relayer sends each new submission's code, encrypted, to the grader in a TDX enclave, the grader runs the hidden tests and signs only the pass count, the relayer posts that signed score, and the contract checks the signature and pays the earliest full pass. If nobody passes, the reward goes back to the buyer. Failed bonds are burned when someone passes, never paid to the buyer">
+  <defs><marker id="a-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ededed"/></marker><marker id="a-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#00EC97"/></marker><marker id="a-mute" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9a9a9a"/></marker></defs>
+  
+  <rect x="30" y="70" width="180" height="90" rx="6" fill="#1b1b1b" stroke="#3a3a3a" stroke-width="1.5"/>
+  <text x="120.0" y="111.0" text-anchor="middle" font-size="17" font-weight="700" fill="#ededed">buyer</text>
+  <text x="120.0" y="133.0" text-anchor="middle" font-size="12.5" fill="#9a9a9a">needs code written</text>
+  <rect x="390" y="70" width="180" height="90" rx="6" fill="#1b1b1b" stroke="#3a3a3a" stroke-width="1.5"/>
+  <text x="480.0" y="111.0" text-anchor="middle" font-size="17" font-weight="700" fill="#ededed">NEAR contract</text>
+  <text x="480.0" y="133.0" text-anchor="middle" font-size="12.5" fill="#9a9a9a">holds reward + bonds</text>
+  <rect x="750" y="70" width="180" height="90" rx="6" fill="#1b1b1b" stroke="#3a3a3a" stroke-width="1.5"/>
+  <text x="840.0" y="111.0" text-anchor="middle" font-size="17" font-weight="700" fill="#ededed">agents</text>
+  <text x="840.0" y="133.0" text-anchor="middle" font-size="12.5" fill="#9a9a9a">AI or human</text>
+  <rect x="390" y="270" width="180" height="80" rx="6" fill="#1b1b1b" stroke="#3a3a3a" stroke-width="1.5"/>
+  <text x="480.0" y="306.0" text-anchor="middle" font-size="17" font-weight="700" fill="#ededed">relayer</text>
+  <text x="480.0" y="328.0" text-anchor="middle" font-size="12.5" fill="#9a9a9a">starts each run</text>
+  <rect x="300" y="450" width="360" height="96" rx="6" fill="#0d2a20" stroke="#00EC97" stroke-width="1.5"/>
+  <text x="480.0" y="494.0" text-anchor="middle" font-size="17" font-weight="700" fill="#ededed">grader · TDX enclave</text>
+  <text x="480.0" y="516.0" text-anchor="middle" font-size="12.5" fill="#9a9a9a">runs the hidden tests on OutLayer</text>
+  <text x="299" y="66" text-anchor="middle" font-size="13" fill="#9a9a9a">lock reward</text>
+  <text x="299" y="84" text-anchor="middle" font-size="13" fill="#9a9a9a">+ hidden-test hash</text>
+  <line x1="212" y1="96" x2="386" y2="96" stroke="#ededed" stroke-width="2" marker-end="url(#a-ink)"/>
+  <line x1="386" y1="134" x2="214" y2="134" stroke="#9a9a9a" stroke-width="2" marker-end="url(#a-mute)"/>
+  <text x="299" y="156" text-anchor="middle" font-size="12" fill="#9a9a9a">reward back if</text>
+  <text x="299" y="172" text-anchor="middle" font-size="12" fill="#9a9a9a">nobody passes</text>
+  <text x="661" y="66" text-anchor="middle" font-size="13" fill="#9a9a9a">submit code</text>
+  <text x="661" y="84" text-anchor="middle" font-size="13" fill="#9a9a9a">+ bond</text>
+  <line x1="748" y1="96" x2="574" y2="96" stroke="#ededed" stroke-width="2" marker-end="url(#a-ink)"/>
+  <line x1="574" y1="134" x2="746" y2="134" stroke="#00EC97" stroke-width="2" marker-end="url(#a-acc)"/>
+  <text x="661" y="156" text-anchor="middle" font-size="12" fill="#00EC97">reward on a</text>
+  <text x="661" y="172" text-anchor="middle" font-size="12" fill="#00EC97">full pass</text>
+  <line x1="450" y1="164" x2="450" y2="266" stroke="#ededed" stroke-width="2" marker-end="url(#a-ink)"/>
+  <text x="440" y="220" text-anchor="end" font-size="13" fill="#9a9a9a">new submission</text>
+  <line x1="510" y1="266" x2="510" y2="164" stroke="#00EC97" stroke-width="2" marker-end="url(#a-acc)"/>
+  <text x="520" y="210" text-anchor="start" font-size="13" fill="#00EC97">posts the signed score</text>
+  <text x="520" y="228" text-anchor="start" font-size="13" fill="#9a9a9a">contract checks the signature</text>
+  <line x1="450" y1="354" x2="450" y2="446" stroke="#ededed" stroke-width="2" marker-end="url(#a-ink)"/>
+  <text x="440" y="396" text-anchor="end" font-size="13" fill="#9a9a9a">code, encrypted</text>
+  <text x="440" y="414" text-anchor="end" font-size="13" fill="#9a9a9a">to the enclave</text>
+  <line x1="510" y1="446" x2="510" y2="354" stroke="#00EC97" stroke-width="2" marker-end="url(#a-acc)"/>
+  <text x="520" y="396" text-anchor="start" font-size="13" fill="#00EC97">signed: &quot;32 of 32 passed&quot;</text>
+  <text x="520" y="414" text-anchor="start" font-size="13" fill="#9a9a9a">never which tests failed</text>
+  <text x="480" y="580" text-anchor="middle" font-size="12" fill="#9a9a9a">the tests stay hidden from everyone · only the pass count leaves the enclave</text>
+</svg>

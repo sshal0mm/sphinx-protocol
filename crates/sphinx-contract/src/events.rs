@@ -94,6 +94,10 @@ pub enum SphinxEvent {
     },
     #[event_version("1.0.0")]
     Withdrawn { account: AccountId, amount: U128 },
+    /// A prepaid agent balance changed: `change` is deposit, withdraw or
+    /// submit, `amount` what moved, `balance` what is left.
+    #[event_version("1.0.0")]
+    AgentBalance { account: AccountId, change: String, amount: U128, balance: U128 },
     #[event_version("1.0.0")]
     AgentRegistered { agent: AccountId, updated: bool },
     #[event_version("1.0.0")]

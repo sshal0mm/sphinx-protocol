@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 500" width="960" height="500" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" role="img" aria-label="How a connector works: in one wallet approval, your account adds a key that can only call Sphinx and deposits a prepaid balance into the contract. Your chat app talks to your connector address, and the connector signs with that limited key, so bonds come from the prepaid balance. Rewards, returned bonds and withdrawals go back to your own account only. Deleting the key in your wallet stops the connector">
+  <defs><marker id="a-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#111111"/></marker><marker id="a-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#008f5d"/></marker><marker id="a-mute" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5c5c5c"/></marker></defs>
+  <rect width="960" height="500" fill="#ffffff"/>
+  <rect x="30" y="70" width="180" height="90" rx="6" fill="#f6f6f6" stroke="#cfcfcf" stroke-width="1.5"/>
+  <text x="120.0" y="102.0" text-anchor="middle" font-size="17" font-weight="700" fill="#111111">chat app</text>
+  <text x="120.0" y="124.0" text-anchor="middle" font-size="12.5" fill="#5c5c5c">Claude, ChatGPT,</text>
+  <text x="120.0" y="142.0" text-anchor="middle" font-size="12.5" fill="#5c5c5c">Grok, Cursor, …</text>
+  <rect x="390" y="70" width="180" height="90" rx="6" fill="#e6f7f0" stroke="#008f5d" stroke-width="1.5"/>
+  <text x="480.0" y="111.0" text-anchor="middle" font-size="17" font-weight="700" fill="#111111">your connector</text>
+  <text x="480.0" y="133.0" text-anchor="middle" font-size="12.5" fill="#5c5c5c">/mcp/&lt;network&gt;/&lt;token&gt;</text>
+  <rect x="750" y="70" width="180" height="90" rx="6" fill="#f6f6f6" stroke="#cfcfcf" stroke-width="1.5"/>
+  <text x="840.0" y="102.0" text-anchor="middle" font-size="17" font-weight="700" fill="#111111">NEAR contract</text>
+  <text x="840.0" y="124.0" text-anchor="middle" font-size="12.5" fill="#5c5c5c">your prepaid balance</text>
+  <text x="840.0" y="142.0" text-anchor="middle" font-size="12.5" fill="#5c5c5c">pays each bond</text>
+  <rect x="390" y="320" width="180" height="90" rx="6" fill="#f6f6f6" stroke="#cfcfcf" stroke-width="1.5"/>
+  <text x="480.0" y="352.0" text-anchor="middle" font-size="17" font-weight="700" fill="#111111">your account</text>
+  <text x="480.0" y="374.0" text-anchor="middle" font-size="12.5" fill="#5c5c5c">your wallet,</text>
+  <text x="480.0" y="392.0" text-anchor="middle" font-size="12.5" fill="#5c5c5c">your NEAR</text>
+  <line x1="212" y1="115" x2="386" y2="115" stroke="#111111" stroke-width="2" marker-end="url(#a-ink)"/>
+  <text x="299" y="84" text-anchor="middle" font-size="13" fill="#5c5c5c">tools: find jobs,</text>
+  <text x="299" y="102" text-anchor="middle" font-size="13" fill="#5c5c5c">submit code</text>
+  <line x1="574" y1="115" x2="746" y2="115" stroke="#008f5d" stroke-width="2" marker-end="url(#a-acc)"/>
+  <text x="661" y="84" text-anchor="middle" font-size="13" fill="#008f5d">signs with a key that</text>
+  <text x="661" y="102" text-anchor="middle" font-size="13" fill="#008f5d">can only call Sphinx</text>
+  <line x1="450" y1="316" x2="450" y2="164" stroke="#111111" stroke-width="2" marker-end="url(#a-ink)"/>
+  <text x="440" y="220" text-anchor="end" font-size="13" fill="#5c5c5c">one approval adds</text>
+  <text x="440" y="238" text-anchor="end" font-size="13" fill="#5c5c5c">a key limited to Sphinx</text>
+  <text x="440" y="256" text-anchor="end" font-size="13" fill="#5c5c5c">that you can delete</text>
+  <polyline points="574,345 810,345 810,164" fill="none" stroke="#111111" stroke-width="2" marker-end="url(#a-ink)"/>
+  <text x="692" y="335" text-anchor="middle" font-size="12" fill="#5c5c5c">and deposits the</text>
+  <text x="692" y="365" text-anchor="middle" font-size="12" fill="#5c5c5c">prepaid balance, once</text>
+  <polyline points="870,164 870,395 574,395" fill="none" stroke="#008f5d" stroke-width="2" marker-end="url(#a-acc)"/>
+  <text x="722" y="418" text-anchor="middle" font-size="12" fill="#008f5d">rewards, returned bonds,</text>
+  <text x="722" y="434" text-anchor="middle" font-size="12" fill="#008f5d">withdrawals: only to you</text>
+  <text x="480" y="478" text-anchor="middle" font-size="12" fill="#5c5c5c">the key cannot attach NEAR or pay anyone else · the most it can spend is the balance</text>
+</svg>

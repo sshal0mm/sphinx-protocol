@@ -584,11 +584,13 @@ mod tests {
 
     #[test]
     fn double_encoded_inputs_are_noticed() {
-        let json_text = vec![vec![json!("{\"name\":\"a\"}")], vec![json!("[1,2]")], vec![json!({"name": "a"})]];
+        let json_text =
+            vec![vec![json!("{\"name\":\"a\"}")], vec![json!("[1,2]")], vec![json!({"name": "a"})]];
         assert!(looks_double_encoded(&json_text));
         let escaped = vec![vec![json!("a,b\\n1,2")], vec![json!("x\\ny")]];
         assert!(looks_double_encoded(&escaped));
-        let fine = vec![vec![json!({"name": "a"})], vec![json!("a,b\n1,2")], vec![json!("{not json")]];
+        let fine =
+            vec![vec![json!({"name": "a"})], vec![json!("a,b\n1,2")], vec![json!("{not json")]];
         assert!(!looks_double_encoded(&fine));
         assert!(!looks_double_encoded(&[]));
     }

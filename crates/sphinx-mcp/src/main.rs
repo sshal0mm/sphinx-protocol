@@ -126,8 +126,67 @@ fn is_browser_visit(req: &axum::extract::Request) -> bool {
         && !accept.contains("text/event-stream")
 }
 
+/// The directory after `--connect`, if given: run the self-serve connect
+/// server (see `sphinx_mcp::connect`) instead of a single-account server.
+fn connect_dir() -> Option<String> {
+    let args: Vec<String> = std::env::args().collect();
+    args.iter().position(|a| a == "--connect").and_then(|i| args.get(i + 1).cloned())
+}
+
+/// Serves self-serve connectors for `SPHINX_CONTRACT` at `addr`, keeping
+/// their limited keys in `dir`.
+async fn serve_connect(dir: String, addr: &str) -> std::process::ExitCode {
+    let contract =
+        std::env::var("SPHINX_CONTRACT").unwrap_or_else(|_| "escrow.sphinx999.testnet".to_owned());
+    let Ok(contract) = contract.parse() else {
+        eprintln!("error[SPHINX_E_CLI_CONFIG_MALFORMED]: SPHINX_CONTRACT is not an account id");
+        return std::process::ExitCode::from(78);
+    };
+    let hosts: Vec<String> = std::env::var("SPHINX_MCP_HOSTS")
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|h| !h.is_empty())
+        .map(str::to_owned)
+        .collect();
+    let public =
+        std::env::var("SPHINX_CONNECT_PUBLIC").unwrap_or_else(|_| format!("http://{addr}"));
+    let connect = match sphinx_mcp::connect::Connect::new(
+        contract,
+        std::env::var("SPHINX_API").ok(),
+        &public,
+        hosts,
+        std::path::Path::new(&dir),
+    ) {
+        Ok(c) => std::sync::Arc::new(c),
+        Err(e) => {
+            eprintln!("error[SPHINX_E_CLI_CONFIG_MALFORMED]: {e}");
+            return std::process::ExitCode::from(78);
+        }
+    };
+    let app = connect.router().layer(axum::middleware::from_fn(send_browsers_to_docs));
+    let listener = match tokio::net::TcpListener::bind(addr).await {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("error: cannot listen on {addr}: {e}");
+            return std::process::ExitCode::from(75);
+        }
+    };
+    eprintln!("sphinx-mcp serving self-serve connectors at http://{addr}");
+    match axum::serve(listener, app).await {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: server stopped: {e}");
+            std::process::ExitCode::FAILURE
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> std::process::ExitCode {
+    if let (Some(dir), Some(addr)) = (connect_dir(), http_addr()) {
+        return serve_connect(dir, &addr).await;
+    }
     let read_only = std::env::args().any(|a| a == "--read-only");
     if read_only {
         let set: Vec<&str> = ["SPHINX_ACCOUNT_KEY", "SPHINX_MODEL_KEY", "NEAR_AI_API_KEY"]
@@ -173,6 +232,7 @@ async fn main() -> std::process::ExitCode {
                 return std::process::ExitCode::from(78);
             }
         },
+        pay_from_balance: std::env::var("SPHINX_PAY_FROM_BALANCE").is_ok_and(|v| v == "1"),
         drafts: std::env::var("SPHINX_DRAFTS").map_or_else(
             |_| {
                 std::path::PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| ".".into()))

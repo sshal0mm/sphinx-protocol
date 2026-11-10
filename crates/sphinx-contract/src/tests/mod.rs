@@ -2,6 +2,7 @@
 //! drive it through the public methods, and inspect the receipts it creates
 //! so payouts are asserted, not just status changes.
 
+mod balances;
 mod bounds;
 mod directory;
 mod lifecycle;

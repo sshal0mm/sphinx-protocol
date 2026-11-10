@@ -22,14 +22,14 @@ REMOTE=$(cat <<'SH'
 set -e
 cd "$DIR"
 test -f deploy/.env
-mkdir -p deploy/data/code deploy/data/house deploy/data/mainnet/code deploy/data/mainnet/house deploy/data/mcp-routes
+mkdir -p deploy/data/code deploy/data/house deploy/data/connect deploy/data/mainnet/code deploy/data/mainnet/house deploy/data/mainnet/connect deploy/data/mcp-routes deploy/data/grader
 chown -R 10001 deploy/data
 F="-f deploy/compose.yml"
 [ ! -f deploy/data/agents.compose.yml ] || F="$F -f deploy/data/agents.compose.yml"
 P=""
 if grep -qE '^SPHINX_MAINNET_CONTRACT=.+' deploy/.env; then
   P="--profile mainnet"
-  printf 'location = /mcp/mainnet {\n    set $up http://mcp-public-mainnet:8790;\n    rewrite ^ /mcp break;\n    proxy_pass $up;\n}\n' > deploy/data/mcp-routes/mainnet.conf
+  printf 'location = /mcp/mainnet {\n    set $up http://mcp-public-mainnet:8790;\n    rewrite ^ /mcp break;\n    proxy_pass $up;\n}\nlocation ^~ /mcp/mainnet/ {\n    set $up http://mcp-connect-mainnet:8790;\n    proxy_pass $up;\n}\n' > deploy/data/mcp-routes/mainnet.conf
 else
   rm -f deploy/data/mcp-routes/mainnet.conf
 fi

@@ -78,6 +78,21 @@ services:
       - ./mcp-gateway.conf:/etc/nginx/conf.d/default.conf:ro
       - ./data/mcp-routes:/etc/nginx/mcp-routes:ro
 
+  # Self-serve connectors (sphinx-mcp --connect): /connect/* for the site's
+  # sign-up page, and each user's /mcp/testnet/<token>. Holds only the
+  # limited keys users' wallets granted, in data/connect.
+  mcp-connect:
+    <<: *common
+    image: sphinx-services
+    depends_on: [api]
+    command: ["sphinx-mcp", "--connect", "/data", "--http", "0.0.0.0:8790"]
+    environment:
+      SPHINX_CONTRACT: ${SPHINX_CONTRACT}
+      SPHINX_API: http://api:8787
+      SPHINX_MCP_HOSTS: ${SPHINX_PUBLIC_HOST}
+      SPHINX_CONNECT_PUBLIC: https://${SPHINX_PUBLIC_HOST}
+    volumes: ["./data/connect:/data"]
+
   # ---- mainnet: the same services for the mainnet contract. They start only
   # with the mainnet profile, which deploy.sh turns on once
   # SPHINX_MAINNET_CONTRACT is set in deploy/.env. Their data lives apart, in
@@ -133,6 +148,19 @@ services:
       SPHINX_MODEL_KEY: ${SPHINX_MODEL_KEY}
     volumes: ["./data/mainnet/house:/data/house"]
 
+  mcp-connect-mainnet:
+    <<: *common
+    profiles: [mainnet]
+    image: sphinx-services
+    depends_on: [api-mainnet]
+    command: ["sphinx-mcp", "--connect", "/data", "--http", "0.0.0.0:8790"]
+    environment:
+      SPHINX_CONTRACT: ${SPHINX_MAINNET_CONTRACT:-}
+      SPHINX_API: http://api-mainnet:8787
+      SPHINX_MCP_HOSTS: ${SPHINX_PUBLIC_HOST}
+      SPHINX_CONNECT_PUBLIC: https://${SPHINX_PUBLIC_HOST}
+    volumes: ["./data/mainnet/connect:/data"]
+
   mcp-public-mainnet:
     <<: *common
     profiles: [mainnet]
@@ -150,6 +178,8 @@ services:
     build: { context: .., dockerfile: deploy/Dockerfile, target: site }
     image: sphinx-site
     depends_on: [api]
+    # Grader builds served at /grader/<sha256>.wasm (data/grader, never in git).
+    volumes: ["./data/grader:/grader:ro"]
 
   cloudflared:
     <<: *common

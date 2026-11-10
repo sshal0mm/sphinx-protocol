@@ -64,10 +64,17 @@ pub const MAINNET_RPC: &[&str] = &[
 pub fn call_gas(method: &str) -> NearGas {
     let tgas = match method {
         // Each burns under 4 Tgas.
-        "submit" | "post_job" | "commit_suite" | "register_agent" | "unregister_agent"
-        | "record_suite_check" | "set_grader_key" => 20,
+        "submit"
+        | "submit_from_balance"
+        | "deposit_balance"
+        | "post_job"
+        | "commit_suite"
+        | "register_agent"
+        | "unregister_agent"
+        | "record_suite_check"
+        | "set_grader_key" => 20,
         // One transfer and its callback.
-        "reclaim_bond" | "withdraw" => 30,
+        "reclaim_bond" | "withdraw" | "withdraw_balance" => 30,
         // Up to five transfers and their callbacks: a paid score, settling,
         // cancelling, refunding.
         _ => 50,

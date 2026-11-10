@@ -36,10 +36,26 @@ impl Sphinx {
         code_uri: String,
         code_hash: String,
     ) -> Result<SubmitReceipt> {
-        let mut job = self.job(job_id.0)?;
         let agent = env::predecessor_account_id();
-        let now = env::block_timestamp();
         let attached = env::attached_deposit().as_yoctonear();
+        self.submit_as(agent, attached, job_id, code_uri, code_hash)
+    }
+}
+
+impl Sphinx {
+    /// A submission by `agent` paying `attached` (the bond plus the storage
+    /// deposit), whether attached to the call or drawn from a prepaid
+    /// balance.
+    pub(crate) fn submit_as(
+        &mut self,
+        agent: AccountId,
+        attached: u128,
+        job_id: U64,
+        code_uri: String,
+        code_hash: String,
+    ) -> Result<SubmitReceipt> {
+        let mut job = self.job(job_id.0)?;
+        let now = env::block_timestamp();
         let (mut usage, code_hash) =
             self.check_submit_inner(&job, &agent, attached, &code_uri, &code_hash, now)?;
         let usage_key = (job_id.0, agent.clone());
@@ -79,7 +95,10 @@ impl Sphinx {
         self.jobs.insert(job_id.0, job);
         Ok(receipt)
     }
+}
 
+#[near]
+impl Sphinx {
     /// Records the grader's signed score for one submission. Anyone may post it;
     /// every field must match on-chain state and the signature must verify
     /// against the grader key snapshotted for the job.
@@ -89,8 +108,9 @@ impl Sphinx {
     /// job stops taking submissions and `settle` pays it later. So the
     /// earliest submission that passes wins, whatever order results arrive
     /// in. Anything less than a full pass holds the agent's bond in the job:
-    /// the bond goes to the buyer if the job is paid, and back to the agent
-    /// if the job is refunded.
+    /// the bond is burned (kept by the contract, paid to nobody) if the job
+    /// is paid, and goes back to the agent if the job is refunded or
+    /// cancelled.
     ///
     /// # Errors
     ///

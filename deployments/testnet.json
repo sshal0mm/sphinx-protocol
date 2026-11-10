@@ -2,7 +2,7 @@
   "network": "testnet",
   "contract": "escrow.sphinx999.testnet",
   "owner": "sphinx999.testnet",
-  "code_sha256": "20b7f5b35ffcc49c4e4e82671e2843d417a97c6d5f6b1ec883a4e4d09f5d7338",
+  "code_sha256": "2dde77b97e64d206eff2af052c6c138a57568322b6170fe76b7ae3f14cad255a",
   "deploy_tx": "9q91JAtciwkjSUyTkLazNLiPXkUJztKCnkLcWN3fHaqz",
   "verifier": "verifier.sphinx999.testnet",
   "fee_bps": 500,
@@ -92,5 +92,5 @@
       "source_tag": "grader-e7a89c21"
     }
   ],
-  "upgrade_tx": "6ZmzhnDqMakwNHbSTURBxUJvzppy8JtZj49C79yzaZim"
+  "upgrade_tx": "7FixDzCpnCftUi2sTTsaZEVMw2cNxe54dATrjcrNuF8d"
 }

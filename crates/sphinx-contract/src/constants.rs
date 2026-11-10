@@ -44,3 +44,9 @@ pub const PAYOUT_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 /// The rest are credited to `unclaimed` for `withdraw`, so the largest job
 /// stays well inside the gas a caller attaches.
 pub const MAX_BOND_TRANSFERS_PER_CALL: u32 = 4;
+
+/// Smallest first deposit into a prepaid agent balance.
+pub const MIN_BALANCE_DEPOSIT: NearToken = NearToken::from_millinear(50);
+/// Held from the first deposit to pay for the balance record's storage, and
+/// returned with the rest when the balance is withdrawn in full.
+pub const BALANCE_STORAGE_DEPOSIT: NearToken = NearToken::from_millinear(1);

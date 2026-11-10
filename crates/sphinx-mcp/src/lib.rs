@@ -31,6 +31,7 @@ use std::sync::Arc;
 
 mod buyer;
 mod concierge;
+pub mod connect;
 
 pub use buyer::{DeleteSuite, PostJob};
 pub use concierge::{ConciergeDraft, ConciergePost};
@@ -64,6 +65,10 @@ pub struct Settings {
     /// Most yoctoNEAR this server may attach in deposits over its lifetime,
     /// so text a model reads cannot talk it into spending without bound.
     pub max_spend: u128,
+    /// Submit with `submit_from_balance`, paying bonds from the account's
+    /// prepaid balance: for a connector holding a function-call key, which
+    /// cannot attach deposits.
+    pub pay_from_balance: bool,
 }
 
 #[derive(Clone)]
@@ -160,7 +165,7 @@ pub struct AgentsQuery {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AccountAction {
-    /// One of: status, register, unregister, reclaim_bond, withdraw, settle.
+    /// One of: status, register, unregister, reclaim_bond, withdraw, withdraw_balance, settle.
     pub action: String,
     /// For reclaim_bond and settle.
     #[serde(default, deserialize_with = "optional_job_id")]
@@ -184,6 +189,10 @@ pub struct AccountAction {
     /// For register: a URL or MCP endpoint. Optional.
     #[serde(default)]
     pub contact: String,
+    /// For withdraw_balance: how much of the prepaid balance, in NEAR; all of it if omitted.
+    #[serde(default, deserialize_with = "optional_near_amount")]
+    #[schemars(with = "Option<String>")]
+    pub amount_near: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -454,7 +463,7 @@ impl SphinxMcp {
     }
 
     #[tool(
-        description = "Your account on Sphinx. action: \"status\" shows your NEAR balance, your profile, your record (passes, fails, NEAR earned) and any amount waiting for withdraw; \"register\" publishes or updates your agent profile (name, about, skills, min_reward_near, contact; the first registration attaches a 0.02 NEAR deposit, returned on unregister); \"unregister\" removes it; \"reclaim_bond\" returns the bond of a submission that never got a score (job_id, sub_id); \"withdraw\" pays out payouts that failed earlier, and bonds returned after a refund; \"settle\" pays a passing submission that waited for earlier ones (job_id). Signed with your key."
+        description = "Your account on Sphinx. action: \"status\" shows your NEAR balance, your profile, your record (passes, fails, NEAR earned) and any amount waiting for withdraw; \"register\" publishes or updates your agent profile (name, about, skills, min_reward_near, contact; the first registration attaches a 0.02 NEAR deposit, returned on unregister); \"unregister\" removes it; \"reclaim_bond\" returns the bond of a submission that never got a score (job_id, sub_id); \"withdraw\" pays out payouts that failed earlier, and bonds returned after a refund; \"withdraw_balance\" returns the prepaid balance (all, or amount_near) to this account; \"settle\" pays a passing submission that waited for earlier ones (job_id). Signed with your key."
     )]
     pub async fn sphinx_account(&self, Parameters(p): Parameters<AccountAction>) -> String {
         reply(self.account_action(p).await)
@@ -741,9 +750,18 @@ impl SphinxMcp {
                     .await
             }
             "withdraw" => self.write("withdraw", json!({}), 0).await,
+            // Back to this account only: the prepaid balance, all of it unless
+            // amount_near is given.
+            "withdraw_balance" => {
+                let amount = match p.amount_near.as_deref() {
+                    Some(a) => Some(sphinx_near::parse_near(a)?.to_string()),
+                    None => None,
+                };
+                self.write("withdraw_balance", json!({ "amount": amount }), 0).await
+            }
             "settle" => self.write("settle", json!({ "job_id": job(&p)?.to_string() }), 0).await,
             other => Err(usage(&format!(
-                "unknown action {other:?}; use status, register, unregister, reclaim_bond, withdraw or settle"
+                "unknown action {other:?}; use status, register, unregister, reclaim_bond, withdraw, withdraw_balance or settle"
             ))),
         }
     }
@@ -909,13 +927,14 @@ impl SphinxMcp {
         let code_hash = Hash32::digest(code.as_bytes());
         let code_uri = self.store_code(code).await?;
         let deposit = yocto(&job.bond).saturating_add(yocto(&config.submission_storage_deposit));
-        let receipt = self
-            .write(
-                "submit",
-                json!({ "job_id": job.id, "code_uri": code_uri, "code_hash": code_hash }),
-                deposit,
-            )
-            .await?;
+        let args = json!({ "job_id": job.id, "code_uri": code_uri, "code_hash": code_hash });
+        // A function-call key cannot attach a deposit: the bond and storage
+        // come from the account's prepaid balance instead.
+        let receipt = if self.settings.pay_from_balance {
+            self.write("submit_from_balance", args, 0).await?
+        } else {
+            self.write("submit", args, deposit).await?
+        };
         let sub_id = receipt["returned"]["sub_id"].clone();
         Ok(json!({
             "sub_id": sub_id,
@@ -924,6 +943,7 @@ impl SphinxMcp {
             "code_uri": code_uri,
             "code_hash": code_hash,
             "deposit_yocto": deposit.to_string(),
+            "paid_from": if self.settings.pay_from_balance { "prepaid balance" } else { "attached deposit" },
             "next_step": "call sphinx_jobs with job_id and this sub_id for its status and score; grading usually takes a few minutes",
         }))
     }
@@ -969,8 +989,16 @@ impl SphinxMcp {
         let agent = self.get_agent(id.account.as_str()).await?;
         let unclaimed: String =
             self.settings.escrow.view("get_unclaimed", json!({ "account": id.account })).await?;
+        // Older contracts have no prepaid balances: report none rather than fail.
+        let prepaid: Option<String> = self
+            .settings
+            .escrow
+            .view("get_agent_balance", json!({ "account": id.account }))
+            .await
+            .ok();
         Ok(json!({
             "account": id.account,
+            "prepaid_balance_yocto": prepaid,
             "balance_near": sphinx_near::format_near(balance.total.as_yoctonear()),
             "balance_yocto": balance.total.as_yoctonear().to_string(),
             "profile": agent["profile"],
@@ -1056,7 +1084,10 @@ impl SphinxMcp {
             .with_signer(id.account.clone(), id.signer.clone());
         // The relay pays only for calls without a deposit (NEAR would charge
         // a relayed deposit to the relay); the rest are sent and paid here.
-        if let Some(api) = self.settings.api.as_ref().filter(|_| deposit_yocto == 0) {
+        // Only methods the relay takes go through it; anything else (such as
+        // submit_from_balance) is sent by the account itself.
+        let relayable = sphinx_near::relay::RELAYABLE_METHODS.contains(&method);
+        if let Some(api) = self.settings.api.as_ref().filter(|_| deposit_yocto == 0 && relayable) {
             let signed = call
                 .meta()
                 .presign_with(escrow.network())
@@ -1264,6 +1295,7 @@ mod salt_tests {
             model: None,
             drafts: std::env::temp_dir(),
             max_spend: 0,
+            pay_from_balance: false,
         };
         // Every tool the server can have; without a model the concierge is left out.
         let mut all: Vec<String> =
@@ -1304,6 +1336,7 @@ mod spend_tests {
             model: None,
             drafts: std::env::temp_dir(),
             max_spend: cap,
+            pay_from_balance: false,
         })
     }
 
