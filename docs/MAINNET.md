@@ -100,3 +100,19 @@ command.
 
 reads the contract, the grader registration and every signed result from
 mainnet, exactly as on testnet.
+
+## the deployed code
+
+| | Code SHA-256 | Source | Transaction |
+|---|---|---|---|
+| first deploy, 10 Nov 2026 | `bd35ad59951a2d2e38d653adef29fd97a59aa341924d992a8133feb97020efe6` | `sphinx-protocol` `4e5e127` | `4jpxcd9T5QNZrDL23nLqPzx1LdnM56qTLiHcxQnVxnai` |
+| upgrade, 10 Nov 2026: prepaid balances for connectors, state kept | `6679a96e41bda611731b3d8bd4d2761e720721b01d2872d8e03628cf9476cd48` | `sphinx-protocol` `8f64fe3` | `9o9ftcv4BmuVuVSNnP12zArnxkbpfeyDrmPCrDyf7GE4` |
+
+To rebuild and compare, from the `sphinx-protocol` commit named above:
+
+    cd crates/sphinx-contract && cargo near build reproducible-wasm
+    shasum -a 256 ../../target/near/sphinx_contract/sphinx_contract.wasm
+
+The chain reports the same code as base58: `code_hash` of
+`escrow.sphinxescrow.near` in a `view_account` call is
+`7u2BeMfDcVpAKQMD6YC8FrSAYoasgcb1qKcmqF4Gk2PZ`, the base58 form of `6679a96e…cd48`.

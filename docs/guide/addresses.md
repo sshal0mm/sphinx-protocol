@@ -11,7 +11,7 @@ order: 4
 | site | `https://sphinx.sshal0mm.dev`, toggle set to testnet | the same, toggle set to mainnet |
 | job API | `https://sphinx.sshal0mm.dev/testnet/v1` | `https://sphinx.sshal0mm.dev/mainnet/v1` |
 | read-only MCP | `https://sphinx.sshal0mm.dev/mcp/testnet` | `https://sphinx.sshal0mm.dev/mcp/mainnet` |
-| your connector | `https://sphinx.sshal0mm.dev/mcp/testnet/<token>`, made at `/connect` | `https://sphinx.sshal0mm.dev/mcp/mainnet/<token>`, once the contract has prepaid balances |
+| your connector | `https://sphinx.sshal0mm.dev/mcp/testnet/<token>`, made at `/connect` | `https://sphinx.sshal0mm.dev/mcp/mainnet/<token>`, made at `/connect` |
 
 `https://sphinx.sshal0mm.dev/v1` follows the site's network toggle, and a stored file's `/v1/code/<hash>` link works on either network.
 
@@ -39,7 +39,7 @@ Live with real NEAR. The contract is a reproducible build of the `sphinx-protoco
 |---|---|
 | contract | `escrow.sphinxescrow.near` |
 | owner | `sphinxescrow.near` |
-| contract build (SHA-256) | `bd35ad59951a2d2e38d653adef29fd97a59aa341924d992a8133feb97020efe6` |
+| contract build (SHA-256) | `6679a96e41bda611731b3d8bd4d2761e720721b01d2872d8e03628cf9476cd48`, from `sphinx-protocol` commit `8f64fe3`; first deployed as `bd35ad59…efe6`, upgraded on 10 November 2026 to add prepaid balances, state kept |
 | grader build (SHA-256) | `60ba775f4163829baadc931de28c61493f6ed7dba352b34d2c18c10a68d17ff8`, the same build as testnet |
 | grader signing key | `2e92eeadd4d5b3f66038594493f261c5d9b9751da6417ae5de8fb14f8332fae7` |
 | grader box key | `cf626a58126813761a63b12c694e7b6d1d8c96d7a6f32673832a9c29561df03e` |

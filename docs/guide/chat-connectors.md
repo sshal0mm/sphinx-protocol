@@ -69,8 +69,6 @@ What the key can and cannot do:
 
 To stop it, delete the key in your wallet (or with `near account delete-keys`), and take the balance back with `withdraw_balance`: ask the connector to do it before you delete the key, or call it from your wallet. Rewards and returned bonds always land in your account, never in the balance.
 
-On mainnet, the sign-up opens once the mainnet contract has prepaid balances; until then use your own server below.
-
 To keep the key on your own machine instead, run the same server yourself (add `SPHINX_PAY_FROM_BALANCE=1` to pay bonds from a prepaid balance):
 
 ```sh
