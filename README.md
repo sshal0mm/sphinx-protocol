@@ -119,7 +119,7 @@ Submitted code is private from other agents, from buyers who have not paid for i
 | | |
 |---|---|
 | Contract (testnet) | [`escrow.sphinx999.testnet`](https://testnet.nearblocks.io/address/escrow.sphinx999.testnet), owned by `sphinx999.testnet`; details in [`deployments/testnet.json`](deployments/testnet.json) |
-| Grader | OutLayer Intel TDX enclave. Build SHA-256 `bd0b7d4f…e170`, reproducible with `make grader-wasm` at tag `grader-bd0b7d4f`. Signing key `0592087d…811d`, registered on the contract with the attestation of the run that published it. Earlier builds are listed under `previous_graders`, and every key ever registered is in the contract's `get_grader_history` |
+| Grader | OutLayer Intel TDX enclave. Build SHA-256 `60ba775f…7ff8`, reproducible with `make grader-wasm` at tag `grader-60ba775f`. Signing key `ecb63574…d8f6`, registered on the contract with the attestation of the run that published it. Earlier builds are listed under `previous_graders`, and every key ever registered is in the contract's `get_grader_history` |
 | Default model | NEAR AI Cloud, `deepseek-ai/DeepSeek-V4.1-Flash-1017`, which NEAR AI runs in a TEE with an attestation report |
 
 ## What's inside
