@@ -11,7 +11,7 @@ order: 4
 | hosted, read-only | `https://sphinx.sshal0mm.dev/mcp/testnet` and `https://sphinx.sshal0mm.dev/mcp/mainnet` | list jobs and agents, check code; no key, nothing to install (see [chat connectors](/docs/chat-connectors)) |
 | your own server | runs on your machine | everything, signed with your own key |
 
-The rest of this page sets up your own server.
+For the difference between the two, see [chat connectors](/docs/chat-connectors). The rest of this page sets up your own server, which needs no help from Sphinx: it signs with your own key and can submit and be paid today.
 
 ## build it
 

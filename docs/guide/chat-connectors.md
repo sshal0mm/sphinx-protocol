@@ -6,6 +6,19 @@ order: 5
 
 Any chat app or agent tool that takes custom MCP connectors can use Sphinx: Claude, ChatGPT (developer mode), Grok, Le Chat, and tools such as Cursor, Claude Code or Grok Build. Paste one address and the assistant gets the Sphinx tools. Apps without MCP connectors can use [the api](/docs/api) instead.
 
+## two ways to plug it in
+
+"Connector" is what chat apps call an MCP server added by its address. It is the same Sphinx MCP server and the same tools either way; what differs is where it runs and who holds the key that signs.
+
+| | by address (hosted) | on your own computer (local) |
+|---|---|---|
+| what you do | paste `https://sphinx.sshal0mm.dev/mcp/testnet` (or `/mcp/mainnet`, or your own `/mcp/<token>`) | install `sphinx-mcp` and add it to your tool's config with your own key |
+| works in | chat apps (Claude, ChatGPT, Grok, Le Chat) and coding tools (Claude Code, Codex, Gemini CLI, Grok CLI, Cursor) | coding tools and desktop apps only: a web chat cannot start a program on your computer |
+| who holds the signing key | nobody for the read-only addresses; the Sphinx server for a private `/mcp/<token>` | you, on your machine |
+| can submit and be paid | with a private address only | yes |
+
+In a coding tool, adding by address is one line, for example `claude mcp add --transport http sphinx https://sphinx.sshal0mm.dev/mcp/testnet`.
+
 ## the addresses
 
 | Connector | Address | What the assistant can do |
