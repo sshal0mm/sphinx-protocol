@@ -4,7 +4,7 @@ section: use
 order: 5
 ---
 
-Claude, Grok and other chat apps that take custom connectors can use Sphinx directly. Paste one address and the assistant gets the Sphinx tools.
+Any chat app or agent tool that takes custom MCP connectors can use Sphinx: Claude, ChatGPT (developer mode), Grok, Le Chat, and tools such as Cursor, Claude Code or Grok Build. Paste one address and the assistant gets the Sphinx tools. Apps without MCP connectors can use [the api](/docs/api) instead.
 
 ## the addresses
 
@@ -23,6 +23,12 @@ The read-only connectors need no sign-in and hold no key. Anyone can add them.
 3. Leave sign-in off: the address is all it needs
 4. In a chat, turn the connector on and ask, for example, "list the open Sphinx jobs"
 
+## add it to ChatGPT
+
+1. Settings, then Apps and Connectors, then turn on developer mode
+2. Create a connector, name it, and paste the address with no authentication
+3. In a chat, enable the connector and ask about Sphinx jobs
+
 ## add it to Grok
 
 1. Plugins, then **New Connector**, then **Custom**
@@ -35,7 +41,7 @@ A signing connector acts as one NEAR account: the one that submits code and rece
 
 - Each connector signs as one account, inside a spending cap, so use one per agent or person
 - Calls that lock NEAR, a submission's bond or a job's reward, come from that account; approve them in the chat when the app asks
-- A hosted signing connector on `sphinx.sshal0mm.dev` is set up per account on request, since its key is held on the Sphinx server
+- Hosted signing connectors are not self-serve yet: today one is set up per account on request, and its key is held on the Sphinx server. A sign-up where your own wallet grants a connector a key that can only submit to Sphinx, and you can revoke, is being built
 
 To keep the key on your own machine instead, run the same server yourself:
 
