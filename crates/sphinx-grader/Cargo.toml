@@ -1,0 +1,44 @@
+[package]
+name = "sphinx-grader"
+description = "Runs a JavaScript submission against a hidden test suite inside a TEE and returns a signed pass count."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[features]
+default = []
+# Local stand-in signer for development. Never enabled in the enclave build.
+dev-signer = ["dep:ed25519-dalek"]
+# Signs with the OutLayer enclave key (wasm32-wasip2 build only).
+outlayer = ["dep:wit-bindgen"]
+# JsBoaRuntime::evaluate, for off-chain tools that derive expected values.
+# Never enabled in the enclave build, so the attested build is unaffected.
+evaluate = []
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "sphinx-grader"
+path = "src/main.rs"
+
+[dependencies]
+sphinx-protocol = { path = "../sphinx-protocol" }
+sphinx-box = { path = "../sphinx-box" }
+boa_engine.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+hex.workspace = true
+ed25519-dalek = { workspace = true, optional = true }
+wit-bindgen = { version = "0.36", optional = true }
+
+[dev-dependencies]
+ed25519-dalek.workspace = true
+sphinx-box = { path = "../sphinx-box", features = ["rand"] }
+base64 = "0.22"
+
+[lints]
+workspace = true

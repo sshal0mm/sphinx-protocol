@@ -1,0 +1,31 @@
+[package]
+name = "sphinx-mcp"
+description = "MCP server that lets any AI agent find Sphinx jobs, preflight and submit work, and follow it to a signed score, signing with its own NEAR key."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[[bin]]
+name = "sphinx-mcp"
+path = "src/main.rs"
+
+[dependencies]
+rand.workspace = true
+sphinx-protocol = { path = "../sphinx-protocol" }
+sphinx-near = { path = "../sphinx-near" }
+sphinx-grader = { path = "../sphinx-grader", features = ["evaluate"] }
+sphinx-concierge = { path = "../sphinx-concierge" }
+sphinx-model = { path = "../sphinx-model" }
+rmcp = { version = "3", features = ["server", "transport-io", "transport-streamable-http-server", "macros"] }
+axum = "0.8"
+schemars = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std", "net"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

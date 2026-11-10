@@ -1,0 +1,445 @@
+{
+  "version": 1,
+  "runtime": "js-boa/1",
+  "entry": "fifoPnl",
+  "tests": [
+    {
+      "args": [
+        [
+          {
+            "side": "buy",
+            "qty": 10,
+            "price_cents": 10000,
+            "fee_cents": 100
+          },
+          {
+            "side": "buy",
+            "qty": 10,
+            "price_cents": 11000,
+            "fee_cents": 100
+          },
+          {
+            "side": "sell",
+            "qty": 15,
+            "price_cents": 12000,
+            "fee_cents": 150
+          }
+        ]
+      ],
+      "expected": {
+        "realized_cents": 24650,
+        "position": 5,
+        "avg_open_price_cents": 11000
+      }
+    },
+    {
+      "args": [
+        []
+      ],
+      "expected": {
+        "realized_cents": 0,
+        "position": 0,
+        "avg_open_price_cents": null
+      }
+    },
+    {
+      "args": [
+        [
+          {
+            "side": "buy",
+            "qty": 5,
+            "price_cents": 1000
+          }
+        ]
+      ],
+      "expected": {
+        "realized_cents": 0,
+        "position": 5,
+        "avg_open_price_cents": 1000
+      }
+    },
+    {
+      "args": [
+        [
+          {
+            "side": "buy",
+            "qty": 5,
+            "price_cents": 1000
+          },
+          {
+            "side": "sell",
+            "qty": 5,
+            "price_cents": 900
+          }
+        ]
+      ],
+      "expected": {
+        "realized_cents": -500,
+        "position": 0,
+        "avg_open_price_cents": null
+      }
+    },
+    {
+      "args": [
+        [
+          {
+            "side": "sell",
+            "qty": 3,
+            "price_cents": 5000,
+            "fee_cents": 10
+          },
+          {
+            "side": "buy",
+            "qty": 3,
+            "price_cents": 4000,
+            "fee_cents": 10
+          }
+        ]
+      ],
+      "expected": {
+        "realized_cents": 2980,
+        "position": 0,
+        "avg_open_price_cents": null
+      }
+    },
+    {
+      "args": [
+        [
+          {
+            "side": "buy",
+            "qty": 10,
+            "price_cents": 100
+          },
+          {
+            "side": "sell",
+            "qty": 15,
+            "price_cents": 120
+          }
+        ]
+      ],
+      "expected": {
+        "realized_cents": 200,
+        "position": -5,
+        "avg_open_price_cents": 120
+      }
+    },
+    {
+      "args": [
+        [
+          {
+            "side": "buy",
+            "qty": 10,
+            "price_cents": 100
+          },
+          {
+            "side": "sell",
+            "qty": 15,
+            "price_cents": 120
+          },
+          {
+            "side": "buy",
+            "qty": 5,
+            "price_cents": 110
+          }
+        ]
+      ],
+      "expected": {
+        "realized_cents": 250,
+        "position": 0,
+        "avg_open_price_cents": null
+      }
+    },
+    {
+      "args": [
+        [
+          {
+            "side": "sell",
+            "qty": 4,
+            "price_cents": 200
+          },
+          {
+            "side": "sell",
+            "qty": 4,
+            "price_cents": 210
+          },
+          {
+            "side": "buy",
+            "qty": 6,
+            "price_cents": 190
+          }
+        ]
+      ],
+      "expected": {
+        "realized_cents": 80,
+        "position": -2,
+        "avg_open_price_cents": 210
+      }
+    },
+    {
+      "args": [
+        [
+          {
+            "side": "buy",
+            "qty": 1,
+            "price_cents": 100
+          },
+          {
+            "side": "buy",
+            "qty": 2,
+            "price_cents": 101
+          }
+        ]
+      ],
+      "expected": {
+        "realized_cents": 0,
+        "position": 3,
+        "avg_open_price_cents": 101
+      }
+    },
+    {
+      "args": [
+        [
+          {
+            "side": "buy",
+            "qty": 1,
+            "price_cents": 100
+          },
+          {
+            "side": "buy",
+            "qty": 1,
+            "price_cents": 101
+          }
+        ]
+      ],
+      "expected": {
+        "realized_cents": 0,
+        "position": 2,
+        "avg_open_price_cents": 101
+      }
+    },
+    {
+      "args": [
+        [
+          {
+            "side": "buy",
+            "qty": 100,
+            "price_cents": 5000,
+            "fee_cents": 0
+          },
+          {
+            "side": "sell",
+            "qty": 30,
+            "price_cents": 5100,
+            "fee_cents": 5
+          },
+          {
+            "side": "sell",
+            "qty": 30,
+            "price_cents": 4900,
+            "fee_cents": 5
+          },
+          {
+            "side": "sell",
+            "qty": 40,
+            "price_cents": 5050,
+            "fee_cents": 5
+          }
+        ]
+      ],
+      "expected": {
+        "realized_cents": 1985,
+        "position": 0,
+        "avg_open_price_cents": null
+      }
+    },
+    {
+      "args": [
+        [
+          {
+            "side": "buy",
+            "qty": 3,
+            "price_cents": 100
+          },
+          {
+            "side": "buy",
+            "qty": 3,
+            "price_cents": 200
+          },
+          {
+            "side": "buy",
+            "qty": 3,
+            "price_cents": 300
+          },
+          {
+            "side": "sell",
+            "qty": 4,
+            "price_cents": 250
+          }
+        ]
+      ],
+      "expected": {
+        "realized_cents": 500,
+        "position": 5,
+        "avg_open_price_cents": 260
+      }
+    },
+    {
+      "args": [
+        [
+          {
+            "side": "sell",
+            "qty": 10,
+            "price_cents": 1000
+          },
+          {
+            "side": "buy",
+            "qty": 25,
+            "price_cents": 900
+          },
+          {
+            "side": "sell",
+            "qty": 5,
+            "price_cents": 1100
+          }
+        ]
+      ],
+      "expected": {
+        "realized_cents": 2000,
+        "position": 10,
+        "avg_open_price_cents": 900
+      }
+    },
+    {
+      "args": [
+        [
+          {
+            "side": "buy",
+            "qty": 7,
+            "price_cents": 333,
+            "fee_cents": 1
+          },
+          {
+            "side": "sell",
+            "qty": 7,
+            "price_cents": 333,
+            "fee_cents": 1
+          }
+        ]
+      ],
+      "expected": {
+        "realized_cents": -2,
+        "position": 0,
+        "avg_open_price_cents": null
+      }
+    },
+    {
+      "args": [
+        [
+          {
+            "side": "buy",
+            "qty": 1000000,
+            "price_cents": 123456,
+            "fee_cents": 999
+          },
+          {
+            "side": "sell",
+            "qty": 999999,
+            "price_cents": 123457
+          }
+        ]
+      ],
+      "expected": {
+        "realized_cents": 999000,
+        "position": 1,
+        "avg_open_price_cents": 123456
+      }
+    },
+    {
+      "args": [
+        [
+          {
+            "side": "sell",
+            "qty": 2,
+            "price_cents": 100
+          },
+          {
+            "side": "sell",
+            "qty": 1,
+            "price_cents": 101
+          }
+        ]
+      ],
+      "expected": {
+        "realized_cents": 0,
+        "position": -3,
+        "avg_open_price_cents": 100
+      }
+    },
+    {
+      "args": [
+        [
+          {
+            "side": "buy",
+            "qty": 5,
+            "price_cents": 100
+          },
+          {
+            "side": "sell",
+            "qty": 5,
+            "price_cents": 110
+          },
+          {
+            "side": "sell",
+            "qty": 5,
+            "price_cents": 120
+          },
+          {
+            "side": "buy",
+            "qty": 5,
+            "price_cents": 100
+          }
+        ]
+      ],
+      "expected": {
+        "realized_cents": 150,
+        "position": 0,
+        "avg_open_price_cents": null
+      }
+    },
+    {
+      "args": [
+        [
+          {
+            "side": "buy",
+            "qty": 2,
+            "price_cents": 50,
+            "fee_cents": 3
+          },
+          {
+            "side": "sell",
+            "qty": 1,
+            "price_cents": 40,
+            "fee_cents": 3
+          },
+          {
+            "side": "buy",
+            "qty": 4,
+            "price_cents": 45,
+            "fee_cents": 3
+          },
+          {
+            "side": "sell",
+            "qty": 8,
+            "price_cents": 60,
+            "fee_cents": 3
+          }
+        ]
+      ],
+      "expected": {
+        "realized_cents": 48,
+        "position": -3,
+        "avg_open_price_cents": 60
+      }
+    }
+  ]
+}

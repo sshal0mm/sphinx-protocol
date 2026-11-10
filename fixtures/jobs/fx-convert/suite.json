@@ -1,0 +1,229 @@
+{
+  "version": 1,
+  "runtime": "js-boa/1",
+  "entry": "convert",
+  "tests": [
+    {
+      "args": [
+        {
+          "EUR": 1084200
+        },
+        "EUR",
+        "USD",
+        1000
+      ],
+      "expected": 1084
+    },
+    {
+      "args": [
+        {
+          "EUR": 1084200,
+          "JPY": 6667
+        },
+        "EUR",
+        "JPY",
+        100
+      ],
+      "expected": 163
+    },
+    {
+      "args": [
+        {
+          "EUR": 1084200
+        },
+        "USD",
+        "EUR",
+        1000
+      ],
+      "expected": 922
+    },
+    {
+      "args": [
+        {},
+        "USD",
+        "USD",
+        12345
+      ],
+      "expected": 12345
+    },
+    {
+      "args": [
+        {},
+        "EUR",
+        "EUR",
+        500
+      ],
+      "expected": 500
+    },
+    {
+      "args": [
+        {
+          "KWD": 3254000
+        },
+        "KWD",
+        "USD",
+        1000
+      ],
+      "expected": 325
+    },
+    {
+      "args": [
+        {
+          "KWD": 3254000
+        },
+        "USD",
+        "KWD",
+        10000
+      ],
+      "expected": 30731
+    },
+    {
+      "args": [
+        {
+          "JPY": 6667,
+          "KRW": 723
+        },
+        "JPY",
+        "KRW",
+        1000
+      ],
+      "expected": 9221
+    },
+    {
+      "args": [
+        {
+          "GBP": 2000000
+        },
+        "USD",
+        "GBP",
+        1
+      ],
+      "expected": 0
+    },
+    {
+      "args": [
+        {
+          "GBP": 2000000
+        },
+        "USD",
+        "GBP",
+        3
+      ],
+      "expected": 2
+    },
+    {
+      "args": [
+        {
+          "GBP": 1250000
+        },
+        "USD",
+        "GBP",
+        15
+      ],
+      "expected": 12
+    },
+    {
+      "args": [
+        {
+          "GBP": 2000000
+        },
+        "USD",
+        "GBP",
+        -1
+      ],
+      "expected": 0
+    },
+    {
+      "args": [
+        {
+          "GBP": 2000000
+        },
+        "USD",
+        "GBP",
+        -3
+      ],
+      "expected": -2
+    },
+    {
+      "args": [
+        {
+          "EUR": 1084200
+        },
+        "EUR",
+        "XYZ",
+        100
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        {
+          "EUR": 1084200
+        },
+        "EUR",
+        "GBP",
+        100
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        {
+          "EUR": 0,
+          "GBP": 1250000
+        },
+        "EUR",
+        "GBP",
+        100
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        {
+          "EUR": 1084200
+        },
+        "toString",
+        "USD",
+        100
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        {
+          "NGN": 645,
+          "BHD": 2659000
+        },
+        "NGN",
+        "BHD",
+        1000000
+      ],
+      "expected": 2426
+    },
+    {
+      "args": [
+        {
+          "ISK": 7200,
+          "CLP": 1060
+        },
+        "ISK",
+        "CLP",
+        999999
+      ],
+      "expected": 6792446
+    },
+    {
+      "args": [
+        {
+          "OMR": 2597000,
+          "JOD": 1410000
+        },
+        "OMR",
+        "JOD",
+        -1000000
+      ],
+      "expected": -1841844
+    }
+  ]
+}

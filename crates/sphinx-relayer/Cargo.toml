@@ -1,0 +1,24 @@
+[package]
+name = "sphinx-relayer"
+description = "Keeps Sphinx jobs moving: runs the enclave grader for committed suites and pending submissions and posts the signed results."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[[bin]]
+name = "sphinx-relayer"
+path = "src/main.rs"
+
+[dependencies]
+sphinx-protocol = { path = "../sphinx-protocol" }
+sphinx-near = { path = "../sphinx-near" }
+sphinx-box = { path = "../sphinx-box" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "fs"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+serde_json.workspace = true
+
+[lints]
+workspace = true

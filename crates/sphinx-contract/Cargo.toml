@@ -1,0 +1,37 @@
+[package]
+name = "sphinx-contract"
+description = "NEAR escrow that releases a reward only for a submission a TEE-attested grader signed as passing."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk.workspace = true
+hex.workspace = true
+sphinx-protocol = { path = "../sphinx-protocol", features = ["borsh"] }
+
+# ABI generation runs natively and needs JSON schemas for protocol types.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+sphinx-protocol = { path = "../sphinx-protocol", features = ["borsh", "abi"] }
+
+[dev-dependencies]
+near-sdk = { workspace = true, features = ["unit-testing"] }
+ed25519-dalek.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
+
+# `cargo near build reproducible-wasm` builds in this pinned image, so anyone
+# can rebuild the deployed code hash from the tagged source.
+[package.metadata.near.reproducible_build]
+image = "sourcescan/cargo-near:0.22.0-rust-1.99.1"
+image_digest = "sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb"
+passed_env = []
+container_build_command = ["cargo", "near", "build", "non-reproducible-wasm", "--locked"]

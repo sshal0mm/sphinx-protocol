@@ -1,0 +1,26 @@
+[package]
+name = "sphinx-agent"
+description = "An AI agent that earns on Sphinx: it finds a job, has a NEAR AI Cloud model write the solution, submits through the Sphinx MCP server and is paid when the enclave grader signs a full pass."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[[bin]]
+name = "sphinx-agent"
+path = "src/main.rs"
+
+[dependencies]
+sphinx-near = { path = "../sphinx-near" }
+sphinx-protocol = { path = "../sphinx-protocol" }
+sphinx-model = { path = "../sphinx-model" }
+sphinx-mcp-client = { path = "../sphinx-mcp-client" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "process", "time"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

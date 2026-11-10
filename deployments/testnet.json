@@ -1,0 +1,83 @@
+{
+  "network": "testnet",
+  "contract": "escrow.sphinx999.testnet",
+  "owner": "sphinx999.testnet",
+  "code_sha256": "20b7f5b35ffcc49c4e4e82671e2843d417a97c6d5f6b1ec883a4e4d09f5d7338",
+  "deploy_tx": "9q91JAtciwkjSUyTkLazNLiPXkUJztKCnkLcWN3fHaqz",
+  "verifier": "verifier.sphinx999.testnet",
+  "fee_bps": 500,
+  "allow_dev_keys": false,
+  "grader": {
+    "mode": "outlayer_tdx",
+    "url": "https://test.fastfs.io/relayer.sphinx999.testnet/outlayer.testnet/6469c4d3f67b2402da52a66a0cccdb638eb9afdd596292f9d49b4301ceb39c20.wasm",
+    "wasm_sha256": "6469c4d3f67b2402da52a66a0cccdb638eb9afdd596292f9d49b4301ceb39c20",
+    "public_key": "5c32135ac7384c9bec5c546b618228e5b93797a39c5097edf8e1f0593f8d9103",
+    "box_public_key": "6c66c722c0f88fb1f89db2e9ad7b3e48e2b6d9a927d7cc03083a9ef77d09f965",
+    "caller": "relayer.sphinx999.testnet",
+    "attestation": "https://testnet-api.outlayer.ai/attestations/by-tx/5oNSepJXsoTQEbCthK5KrKw6cWo6EVAEQXXZ8gHM8A1u",
+    "identity_tx": "5oNSepJXsoTQEbCthK5KrKw6cWo6EVAEQXXZ8gHM8A1u",
+    "registration_tx": "c2g3DW6GtwJvE5zkthh3wLNEQgzs3yvTC1PLmkLp6NF",
+    "hidden_suites": true,
+    "source_tag": "grader-6469c4d3"
+  },
+  "archive": [
+    {
+      "contract": "sphinx999-escrow.testnet",
+      "code_sha256": "466b3f86ad09b69e28e463cd621ead10ea7fd85c0bf29438ad6ad76d267c5219",
+      "note": "the first testnet escrow; superseded by a fresh deploy with a separate owner and no dev keys",
+      "grader": {
+        "mode": "outlayer_tdx",
+        "url": "https://test.fastfs.io/relayer.sphinx999.testnet/outlayer.testnet/af858a5cb9c88fe95b949c29e17ab2dc0c0ea9f457acf4ba80648c0fc1b66bf9.wasm",
+        "wasm_sha256": "af858a5cb9c88fe95b949c29e17ab2dc0c0ea9f457acf4ba80648c0fc1b66bf9",
+        "public_key": "e9f22b16ca34d1c9490de400f3f838e646bf7447995f3607c9f848cec9b1f37b",
+        "caller": "relayer.sphinx999.testnet",
+        "attestation": "https://testnet-api.outlayer.ai/attestations/by-tx/7VofVg6rrPoU818ft7F29GWy2FghfwHsw7gWU74CDMtK",
+        "registration_tx": "EoVMu1PwDzbt4WCJsFj8Lk1fTwHaFn1yX3GNYCgcWSyo",
+        "hidden_suites": true,
+        "source_tag": "grader-af858a5c"
+      }
+    }
+  ],
+  "previous_graders": [
+    {
+      "mode": "outlayer_tdx",
+      "url": "https://test.fastfs.io/relayer.sphinx999.testnet/outlayer.testnet/bd0b7d4f5b0e2109a613949747461042984513b8138aaabd5b17e6e2de0ee170.wasm",
+      "wasm_sha256": "bd0b7d4f5b0e2109a613949747461042984513b8138aaabd5b17e6e2de0ee170",
+      "public_key": "0592087d6cb4de55f14fcaf593958f7a1a21e7b8921cba34dda0fc072f72811d",
+      "box_public_key": "6cbc59e391b6de1d1b1589739cfae48449e24a3ae4dfb84d469a4f9d1ed0694f",
+      "caller": "relayer.sphinx999.testnet",
+      "attestation": "https://testnet-api.outlayer.ai/attestations/by-tx/5NwPgoYqxdZguemo87MtNPyDGA6PHFVUfKpUjkRCnmJQ",
+      "identity_tx": "5NwPgoYqxdZguemo87MtNPyDGA6PHFVUfKpUjkRCnmJQ",
+      "registration_tx": "5P9DpUGYYhgfVMnH5FzQp2Vq5f2Yis5TJGK8xgnK7RDX",
+      "hidden_suites": true,
+      "source_tag": "grader-bd0b7d4f"
+    },
+    {
+      "mode": "outlayer_tdx",
+      "url": "https://test.fastfs.io/relayer.sphinx999.testnet/outlayer.testnet/d182cced12ef5778e88dddbae6f0893f61dcd35e5956f1b444113a08642967fa.wasm",
+      "wasm_sha256": "d182cced12ef5778e88dddbae6f0893f61dcd35e5956f1b444113a08642967fa",
+      "public_key": "fdff8627362c4f2135442aa14d52eddea53cda0c1bf3135e86498480accf5c7e",
+      "box_public_key": "cc0478b04f1cefff9bf5fb2917cf8b37822ced97d5fa8f15bdb7f70b61379e12",
+      "caller": "relayer.sphinx999.testnet",
+      "attestation": "https://testnet-api.outlayer.ai/attestations/by-tx/7sD277LQvFq81ycn8AuM41jtXXDgGv8maGmHygQa1VpU",
+      "identity_tx": "7sD277LQvFq81ycn8AuM41jtXXDgGv8maGmHygQa1VpU",
+      "registration_tx": "HD21CcGyimBBZ7vt5fTUb4cHcEV68JKfv9KZQN1j3AMV",
+      "hidden_suites": true,
+      "source_tag": "grader-d182cced"
+    },
+    {
+      "mode": "outlayer_tdx",
+      "url": "https://test.fastfs.io/relayer.sphinx999.testnet/outlayer.testnet/e7a89c21e71ae0f459786837a2c6a29679909a7cfd2b54f79a79e331fd0513ca.wasm",
+      "wasm_sha256": "e7a89c21e71ae0f459786837a2c6a29679909a7cfd2b54f79a79e331fd0513ca",
+      "public_key": "5d479b0c9132a0fca784087b91a2a4272a73de8e092a0593a2c7904007a43931",
+      "box_public_key": "3c125b46cfe0a5f00cb7886c01286419df841e83f77a0290fbe1844dac94be6b",
+      "caller": "relayer.sphinx999.testnet",
+      "attestation": "https://testnet-api.outlayer.ai/attestations/by-tx/BFLEqEDK3rEpS2PDYpq9PiQq9ff91eZm4VPXC5L3wWve",
+      "identity_tx": "BFLEqEDK3rEpS2PDYpq9PiQq9ff91eZm4VPXC5L3wWve",
+      "registration_tx": "HmYWMkEysHEVHKcJLsA5xFphohYBrsYPrDBc22oYmjYK",
+      "hidden_suites": true,
+      "source_tag": "grader-e7a89c21"
+    }
+  ],
+  "upgrade_tx": "6ZmzhnDqMakwNHbSTURBxUJvzppy8JtZj49C79yzaZim"
+}

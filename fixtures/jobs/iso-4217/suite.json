@@ -1,0 +1,223 @@
+{
+  "version": 1,
+  "runtime": "js-boa/1",
+  "entry": "currency",
+  "tests": [
+    {
+      "args": [
+        "usd"
+      ],
+      "expected": {
+        "code": "USD",
+        "numeric": "840",
+        "minor_units": 2
+      }
+    },
+    {
+      "args": [
+        "JPY"
+      ],
+      "expected": {
+        "code": "JPY",
+        "numeric": "392",
+        "minor_units": 0
+      }
+    },
+    {
+      "args": [
+        "ABC"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        " kwd "
+      ],
+      "expected": {
+        "code": "KWD",
+        "numeric": "414",
+        "minor_units": 3
+      }
+    },
+    {
+      "args": [
+        "bhd"
+      ],
+      "expected": {
+        "code": "BHD",
+        "numeric": "048",
+        "minor_units": 3
+      }
+    },
+    {
+      "args": [
+        "CLF"
+      ],
+      "expected": {
+        "code": "CLF",
+        "numeric": "990",
+        "minor_units": 4
+      }
+    },
+    {
+      "args": [
+        "UYW"
+      ],
+      "expected": {
+        "code": "UYW",
+        "numeric": "927",
+        "minor_units": 4
+      }
+    },
+    {
+      "args": [
+        "AUD"
+      ],
+      "expected": {
+        "code": "AUD",
+        "numeric": "036",
+        "minor_units": 2
+      }
+    },
+    {
+      "args": [
+        "xof"
+      ],
+      "expected": {
+        "code": "XOF",
+        "numeric": "952",
+        "minor_units": 0
+      }
+    },
+    {
+      "args": [
+        "VND"
+      ],
+      "expected": {
+        "code": "VND",
+        "numeric": "704",
+        "minor_units": 0
+      }
+    },
+    {
+      "args": [
+        "IQD"
+      ],
+      "expected": {
+        "code": "IQD",
+        "numeric": "368",
+        "minor_units": 3
+      }
+    },
+    {
+      "args": [
+        "ISK"
+      ],
+      "expected": {
+        "code": "ISK",
+        "numeric": "352",
+        "minor_units": 0
+      }
+    },
+    {
+      "args": [
+        "KMF"
+      ],
+      "expected": {
+        "code": "KMF",
+        "numeric": "174",
+        "minor_units": 0
+      }
+    },
+    {
+      "args": [
+        "TND"
+      ],
+      "expected": {
+        "code": "TND",
+        "numeric": "788",
+        "minor_units": 3
+      }
+    },
+    {
+      "args": [
+        "NGN"
+      ],
+      "expected": {
+        "code": "NGN",
+        "numeric": "566",
+        "minor_units": 2
+      }
+    },
+    {
+      "args": [
+        "KES"
+      ],
+      "expected": {
+        "code": "KES",
+        "numeric": "404",
+        "minor_units": 2
+      }
+    },
+    {
+      "args": [
+        "DEM"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "HRK"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        ""
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        840
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "EURO"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "PYG"
+      ],
+      "expected": {
+        "code": "PYG",
+        "numeric": "600",
+        "minor_units": 0
+      }
+    },
+    {
+      "args": [
+        "Inr"
+      ],
+      "expected": {
+        "code": "INR",
+        "numeric": "356",
+        "minor_units": 2
+      }
+    },
+    {
+      "args": [
+        "XPF"
+      ],
+      "expected": {
+        "code": "XPF",
+        "numeric": "953",
+        "minor_units": 0
+      }
+    }
+  ]
+}

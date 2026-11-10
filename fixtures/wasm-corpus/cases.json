@@ -1,0 +1,86 @@
+[
+  {
+    "name": "honest-identity",
+    "tests": 32,
+    "code": "function solve(x){ return x }",
+    "expect": "32/32"
+  },
+  {
+    "name": "top-level-const",
+    "code": "const K = 1; let calls = 0; const id = x => x * K; function solve(x){ calls++; return id(x) }",
+    "tests": 32,
+    "expect": "32/32"
+  },
+  {
+    "name": "honest-loop-5k",
+    "tests": 32,
+    "code": "function solve(x){ let s=0; for(let i=0;i<5000;i++) s+=i; return x }",
+    "expect": "32/32"
+  },
+  {
+    "name": "honest-loop-19k",
+    "tests": 32,
+    "code": "function solve(x){ let s=0; for(let i=0;i<19000;i++) s+=i; return x }",
+    "expect": "result"
+  },
+  {
+    "name": "infinite-loop",
+    "tests": 32,
+    "code": "function solve(x){ while(true){} }",
+    "expect": "0/32"
+  },
+  {
+    "name": "infinite-loop-at-load",
+    "tests": 32,
+    "code": "while(true){} function solve(x){ return x }",
+    "expect": "0/32"
+  },
+  {
+    "name": "callback-loop",
+    "tests": 32,
+    "code": "function solve(x){ [1].map(() => { for(;;){} }); return x }",
+    "expect": "0/32"
+  },
+  {
+    "name": "nested-loops",
+    "tests": 32,
+    "code": "function solve(x){ for(let i=0;i<19000;i++){ for(let j=0;j<19000;j++){} } return x }",
+    "expect": "0/32"
+  },
+  {
+    "name": "recursion",
+    "tests": 32,
+    "code": "function solve(x){ return solve(x) }",
+    "expect": "0/32"
+  },
+  {
+    "name": "callback-sort-3k",
+    "tests": 32,
+    "code": "function solve(x){ return Array.from({length:3000},(_, i)=>i).sort((a,b)=>b-a)[0] - 2999 + x }",
+    "expect": "0/32"
+  },
+  {
+    "name": "callback-sort-300",
+    "tests": 32,
+    "code": "function solve(x){ return Array.from({length:300},(_, i)=>i).sort((a,b)=>b-a)[0] - 299 + x }",
+    "expect": "32/32"
+  },
+  {
+    "name": "nested-callbacks",
+    "code": "function solve(x){ const a=Array.from({length:3000},(_,i)=>i); a.forEach(()=>a.forEach(()=>{})); return x }",
+    "tests": 32,
+    "expect": "trap"
+  },
+  {
+    "name": "string-doubling",
+    "code": "function solve(x){ let s='x'; for(let i=0;i<40;i++) s=s+s; return x }",
+    "tests": 32,
+    "expect": "trap"
+  },
+  {
+    "name": "huge-array-fill",
+    "code": "function solve(x){ new Array(5e7).fill(0); return x }",
+    "tests": 32,
+    "expect": "trap"
+  }
+]

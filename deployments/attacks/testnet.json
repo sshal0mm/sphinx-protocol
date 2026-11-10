@@ -1,0 +1,181 @@
+{
+  "schema": "sphinx.attacks/1",
+  "network": "testnet",
+  "contract": "escrow.sphinx999.testnet",
+  "job_id": "24",
+  "grader": "bd0b7d4f5b0e2109a613949747461042984513b8138aaabd5b17e6e2de0ee170",
+  "recorded_at": "2026-11-07T22:16:42Z",
+  "attacks": [
+    {
+      "name": "underpaid bond",
+      "attacker": "agent-a.sphinx999.testnet",
+      "attempt": "submit with one yoctoNEAR less than the bond and storage deposit",
+      "expected": "SPHINX_E_SUBMIT_WRONG_DEPOSIT",
+      "got": "SPHINX_E_SUBMIT_WRONG_DEPOSIT",
+      "tx_hash": "EJSPq6hYdrQk1KZ2LfTH4E96rnu24u9PuJfD6ienJK72",
+      "kind": "chain"
+    },
+    {
+      "name": "buyer grades itself",
+      "attacker": "buyer.sphinx999.testnet",
+      "attempt": "the buyer submits to its own job",
+      "expected": "SPHINX_E_SUBMIT_BUYER_SELF",
+      "got": "SPHINX_E_SUBMIT_BUYER_SELF",
+      "tx_hash": "EjsXxHkoUnYVbnQZqShbthV8NfZMoD4V6biHeDpSmzs9",
+      "kind": "chain"
+    },
+    {
+      "name": "copied code",
+      "attacker": "agent-b.sphinx999.testnet",
+      "attempt": "agent-b submits the exact code agent-a already submitted",
+      "expected": "SPHINX_E_SUBMIT_DUPLICATE_CODE",
+      "got": "SPHINX_E_SUBMIT_DUPLICATE_CODE",
+      "tx_hash": "7qDwk3Z5CcqtQRXJRY1YyJQkqEdGMv892uVQpm8ZuPpu",
+      "kind": "chain"
+    },
+    {
+      "name": "attempt flooding",
+      "attacker": "agent-a.sphinx999.testnet",
+      "attempt": "agent-a submits again while its first attempt is still pending",
+      "expected": "SPHINX_E_SUBMIT_PENDING_EXISTS",
+      "got": "SPHINX_E_SUBMIT_PENDING_EXISTS",
+      "tx_hash": "44g9kujAUvoaY5ZJRLFFKY8C5HzsVbuCp2wQ3LrwoXPL",
+      "kind": "chain"
+    },
+    {
+      "name": "forged score",
+      "attacker": "agent-a.sphinx999.testnet",
+      "attempt": "agent-a posts a 12/12 score for itself with a made-up signature",
+      "expected": "SPHINX_E_SIG_INVALID",
+      "got": "SPHINX_E_SIG_INVALID",
+      "tx_hash": "44StXdEYv49qTtX462AwcqPey7EGFCRWC96xygsm42ys",
+      "kind": "chain"
+    },
+    {
+      "name": "replayed score",
+      "attacker": "agent-a.sphinx999.testnet",
+      "attempt": "agent-a reuses the enclave's real 12/12 signature from job 2 for its own submission",
+      "expected": "SPHINX_E_SCORE_FIELD_MISMATCH",
+      "got": "SPHINX_E_SCORE_FIELD_MISMATCH",
+      "tx_hash": "2rKtEf3JNNSaCFTdnZFJijygFuB9HyzjBMPxvgbch9Sc",
+      "kind": "chain"
+    },
+    {
+      "name": "grader takeover",
+      "attacker": "buyer.sphinx999.testnet",
+      "attempt": "the buyer registers its own key as the grader",
+      "expected": "SPHINX_E_AUTH_NOT_OWNER",
+      "got": "SPHINX_E_AUTH_NOT_OWNER",
+      "tx_hash": "C2vLoFqovvW947FQbitCoZLH2oBkGBb5ETWPzpDSLqAT",
+      "kind": "chain"
+    },
+    {
+      "name": "bond grab",
+      "attacker": "buyer.sphinx999.testnet",
+      "attempt": "the buyer reclaims agent-a's pending bond before its grading window ends",
+      "expected": "SPHINX_E_RECLAIM_TOO_EARLY",
+      "got": "SPHINX_E_RECLAIM_TOO_EARLY",
+      "tx_hash": "3G33qYPCYDx7VD1VVpMxmoMLdtvAJH9fP9Sh2W129jkV",
+      "kind": "chain"
+    },
+    {
+      "name": "early refund",
+      "attacker": "buyer.sphinx999.testnet",
+      "attempt": "the buyer takes the reward back before the deadline",
+      "expected": "SPHINX_E_REFUND_TOO_EARLY",
+      "got": "SPHINX_E_REFUND_TOO_EARLY",
+      "tx_hash": "sE3bt7gfwuX2sCMhx8oy7hWjGyuxdY81EjvzvCPUE6U",
+      "kind": "chain"
+    },
+    {
+      "name": "cancel after work",
+      "attacker": "buyer.sphinx999.testnet",
+      "attempt": "the buyer cancels the job once an agent has submitted",
+      "expected": "SPHINX_E_JOB_HAS_SUBMISSIONS",
+      "got": "SPHINX_E_JOB_HAS_SUBMISSIONS",
+      "tx_hash": "HDwsdVhpBEejbrDfwXWpjpdYLxewXFwBQeY4pbFJ5pWL",
+      "kind": "chain"
+    },
+    {
+      "name": "anonymous read",
+      "attacker": "anyone",
+      "attempt": "read agent-a's pending code with no signature",
+      "expected": "HTTP 404",
+      "got": "HTTP 404",
+      "tx_hash": null,
+      "kind": "http"
+    },
+    {
+      "name": "competitor read",
+      "attacker": "agent-b.sphinx999.testnet",
+      "attempt": "agent-b signs a request for agent-a's pending code",
+      "expected": "HTTP 404",
+      "got": "HTTP 404",
+      "tx_hash": null,
+      "kind": "http"
+    },
+    {
+      "name": "early buyer read",
+      "attacker": "buyer.sphinx999.testnet",
+      "attempt": "the buyer reads agent-a's code before paying",
+      "expected": "HTTP 404",
+      "got": "HTTP 404",
+      "tx_hash": null,
+      "kind": "http"
+    },
+    {
+      "name": "borrowed name",
+      "attacker": "agent-a.sphinx999.testnet",
+      "attempt": "agent-b signs with its own key but claims to be agent-a",
+      "expected": "HTTP 404",
+      "got": "HTTP 404",
+      "tx_hash": null,
+      "kind": "http"
+    },
+    {
+      "name": "own code",
+      "attacker": "agent-a.sphinx999.testnet",
+      "attempt": "agent-a reads its own code (allowed)",
+      "expected": "HTTP 200",
+      "got": "HTTP 200",
+      "tx_hash": null,
+      "kind": "http"
+    },
+    {
+      "name": "replayed real score",
+      "attacker": "agent-b.sphinx999.testnet",
+      "attempt": "agent-b posts the enclave's real 12/12 score for its submission a second time",
+      "expected": "SPHINX_E_JOB_WRONG_STATE",
+      "got": "SPHINX_E_JOB_WRONG_STATE",
+      "tx_hash": "7mwPBUk3t2UJ4UhyYpFx43Sd1YXH7NK1kQgD8jiAHTGG",
+      "kind": "chain"
+    },
+    {
+      "name": "paid buyer, winner",
+      "attacker": "buyer.sphinx999.testnet",
+      "attempt": "the buyer reads the winning code of the job it paid (allowed)",
+      "expected": "HTTP 200",
+      "got": "HTTP 200",
+      "tx_hash": null,
+      "kind": "http"
+    },
+    {
+      "name": "paid buyer, loser",
+      "attacker": "buyer.sphinx999.testnet",
+      "attempt": "the buyer reads agent-a's failed code",
+      "expected": "HTTP 404",
+      "got": "HTTP 404",
+      "tx_hash": null,
+      "kind": "http"
+    },
+    {
+      "name": "code in transit",
+      "attacker": "anyone reading the chain",
+      "attempt": "look for the agents' code in the relayer's public enclave requests",
+      "expected": "no plaintext",
+      "got": "no plaintext",
+      "tx_hash": "42vocBRf15snWPuyzKpbzzj172vwJ36qQyRNWebFmVeo",
+      "kind": "chain-read"
+    }
+  ]
+}

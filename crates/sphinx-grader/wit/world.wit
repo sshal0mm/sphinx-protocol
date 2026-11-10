@@ -1,0 +1,9 @@
+package sphinx:grader;
+
+/// The OutLayer host interfaces the enclave grader imports. Copied unchanged
+/// from github.com/out-layer/outlayer `worker/wit` (cb1c6a1a).
+world grader-host {
+    import outlayer:signing-keys/api@0.1.0;
+    import outlayer:encryption-keys/api@0.1.0;
+    import near:rpc/api@0.1.0;
+}

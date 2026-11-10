@@ -1,0 +1,69 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: fmt, lint, test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain from rust-toolchain.toml
+        run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - run: cargo clippy -p sphinx-contract --all-targets --locked -- -D warnings
+      - run: cargo clippy -p sphinx-contract --target wasm32-unknown-unknown --locked -- -D warnings
+      - run: cargo clippy -p sphinx-grader --target wasm32-wasip2 --features outlayer --locked -- -D warnings
+      - run: cargo test --workspace --all-features --locked
+      - run: cargo test -p sphinx-contract --locked
+      - name: Error docs match the catalog
+        run: cargo run -q -p sphinx-protocol --bin gen-error-docs | diff -u docs/ERRORS.md -
+
+  enclave-limits:
+    name: grader under enclave instruction limit
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - uses: bytecodealliance/actions/wasmtime/setup@v1
+      - run: cargo build --release -p sphinx-grader --target wasm32-wasip2 --locked
+      - run: scripts/test-wasm.sh
+      - run: cargo build --release -p sphinx-grader --target wasm32-wasip2 --features outlayer --locked
+      - name: Grader wasm hash
+        run: sha256sum target/wasm32-wasip2/release/sphinx-grader.wasm
+
+  contract:
+    name: contract wasm
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install --locked cargo-near
+      - run: cd crates/sphinx-contract && cargo near build non-reproducible-wasm
+      - run: sha256sum target/near/sphinx_contract/sphinx_contract.wasm
+
+  hygiene:
+    name: scripts, secrets, paths
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: shellcheck
+        run: shellcheck -x scripts/*.sh
+      - name: No local machine paths in the tree
+        run: "! git grep -n '/Users/' -- ':!.github/workflows/ci.yml'"
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

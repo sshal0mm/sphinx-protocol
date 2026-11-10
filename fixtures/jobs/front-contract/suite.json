@@ -1,0 +1,212 @@
+{
+  "version": 1,
+  "runtime": "js-boa/1",
+  "entry": "frontContract",
+  "tests": [
+    {
+      "args": [
+        "ES",
+        "2026-11-07",
+        8
+      ],
+      "expected": {
+        "code": "ESZ6",
+        "expiry": "2026-12-18"
+      }
+    },
+    {
+      "args": [
+        "ES",
+        "2026-12-10",
+        8
+      ],
+      "expected": {
+        "code": "ESH7",
+        "expiry": "2027-03-19"
+      }
+    },
+    {
+      "args": [
+        "ES",
+        "2026-12-09",
+        8
+      ],
+      "expected": {
+        "code": "ESZ6",
+        "expiry": "2026-12-18"
+      }
+    },
+    {
+      "args": [
+        "ES",
+        "2026-12-18",
+        0
+      ],
+      "expected": {
+        "code": "ESH7",
+        "expiry": "2027-03-19"
+      }
+    },
+    {
+      "args": [
+        "ES",
+        "2026-12-17",
+        0
+      ],
+      "expected": {
+        "code": "ESZ6",
+        "expiry": "2026-12-18"
+      }
+    },
+    {
+      "args": [
+        "NQ",
+        "2027-01-01",
+        0
+      ],
+      "expected": {
+        "code": "NQH7",
+        "expiry": "2027-03-19"
+      }
+    },
+    {
+      "args": [
+        "RTY",
+        "2027-03-19",
+        0
+      ],
+      "expected": {
+        "code": "RTYM7",
+        "expiry": "2027-06-18"
+      }
+    },
+    {
+      "args": [
+        "RTY",
+        "2027-03-18",
+        0
+      ],
+      "expected": {
+        "code": "RTYH7",
+        "expiry": "2027-03-19"
+      }
+    },
+    {
+      "args": [
+        "6E",
+        "2026-12-14",
+        0
+      ],
+      "expected": {
+        "code": "6EH7",
+        "expiry": "2027-03-15"
+      }
+    },
+    {
+      "args": [
+        "6E",
+        "2026-12-13",
+        0
+      ],
+      "expected": {
+        "code": "6EZ6",
+        "expiry": "2026-12-14"
+      }
+    },
+    {
+      "args": [
+        "6E",
+        "2027-06-01",
+        10
+      ],
+      "expected": {
+        "code": "6EM7",
+        "expiry": "2027-06-14"
+      }
+    },
+    {
+      "args": [
+        "6E",
+        "2027-09-13",
+        3
+      ],
+      "expected": {
+        "code": "6EZ7",
+        "expiry": "2027-12-13"
+      }
+    },
+    {
+      "args": [
+        "ES",
+        "2028-02-29",
+        5
+      ],
+      "expected": {
+        "code": "ESH8",
+        "expiry": "2028-03-17"
+      }
+    },
+    {
+      "args": [
+        "NQ",
+        "2029-12-31",
+        60
+      ],
+      "expected": {
+        "code": "NQH0",
+        "expiry": "2030-03-15"
+      }
+    },
+    {
+      "args": [
+        "ES",
+        "2026-02-30",
+        5
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "CL",
+        "2026-11-07",
+        5
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "ES",
+        "2026-11-07",
+        61
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "ES",
+        "2026-11-07",
+        -1
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "ES",
+        "11/07/2026",
+        5
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "NQ",
+        "2030-09-20",
+        1
+      ],
+      "expected": {
+        "code": "NQZ0",
+        "expiry": "2030-12-20"
+      }
+    }
+  ]
+}

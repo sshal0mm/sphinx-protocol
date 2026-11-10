@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "runtime": "js-boa/1",
+  "entry": "fib",
+  "tests": [
+    {
+      "args": [
+        0
+      ],
+      "expected": 0
+    },
+    {
+      "args": [
+        1
+      ],
+      "expected": 1
+    },
+    {
+      "args": [
+        2
+      ],
+      "expected": 1
+    },
+    {
+      "args": [
+        10
+      ],
+      "expected": 55
+    },
+    {
+      "args": [
+        20
+      ],
+      "expected": 6765
+    },
+    {
+      "args": [
+        30
+      ],
+      "expected": 832040
+    },
+    {
+      "args": [
+        40
+      ],
+      "expected": 102334155
+    },
+    {
+      "args": [
+        50
+      ],
+      "expected": 12586269025
+    },
+    {
+      "args": [
+        60
+      ],
+      "expected": 1548008755920
+    },
+    {
+      "args": [
+        70
+      ],
+      "expected": 190392490709135
+    },
+    {
+      "args": [
+        75
+      ],
+      "expected": 2111485077978050
+    },
+    {
+      "args": [
+        78
+      ],
+      "expected": 8944394323791464
+    }
+  ]
+}

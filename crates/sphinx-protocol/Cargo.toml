@@ -1,0 +1,34 @@
+[package]
+name = "sphinx-protocol"
+description = "Shared Sphinx protocol: signed result messages, the hidden-suite format, hashes and the error catalog."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[features]
+default = []
+# Borsh encoding for on-chain storage (enabled by the contract).
+borsh = ["dep:borsh"]
+# JSON schema for NEAR ABI generation (enabled by the contract on native builds).
+abi = ["dep:schemars", "borsh?/unstable__schema"]
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+hex.workspace = true
+borsh = { version = "1", features = ["derive"], optional = true }
+schemars = { version = "0.8.22", optional = true }
+
+[dev-dependencies]
+ed25519-dalek.workspace = true
+
+[[bin]]
+name = "gen-error-docs"
+path = "src/bin/gen-error-docs.rs"
+
+[lints]
+workspace = true

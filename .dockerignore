@@ -1,0 +1,6 @@
+target
+.git
+data
+.env
+deploy/.env
+deploy/data

@@ -1,0 +1,27 @@
+[package]
+name = "sphinx-box"
+description = "Encrypted boxes for Sphinx: X25519 + HKDF-SHA256 + ChaCha20-Poly1305, shared by clients and the enclave grader."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[features]
+default = []
+# `encrypt`: fresh ephemeral keys and nonces from the OS. Never needed by the
+# enclave grader, which only opens boxes.
+rand = ["dep:rand_core"]
+
+[dependencies]
+x25519-dalek = { version = "2", default-features = false, features = ["static_secrets", "zeroize"] }
+hkdf = "0.12"
+sha2.workspace = true
+chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
+base64 = "0.22"
+hex.workspace = true
+rand_core = { version = "0.6", features = ["getrandom"], optional = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,23 @@
+# Build output
+/target/
+**/target/
+
+# Local secrets and environment
+.env
+.env.*
+!.env.example
+!.env.mainnet.example
+.near-credentials/
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local API code store
+data/
+
+# Server-only deploy secrets and data
+deploy/.env
+deploy/data/

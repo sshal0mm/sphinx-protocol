@@ -1,0 +1,1 @@
+{"model":"deepseek-ai/DeepSeek-V4.1-Flash-1017","messages":[{"role":"user","content":"Say ok."}],"temperature":0.2,"chat_template_kwargs":{"thinking":false}}

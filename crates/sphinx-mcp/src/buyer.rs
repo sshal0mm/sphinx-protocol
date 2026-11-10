@@ -1,0 +1,278 @@
+//! Buyer tools: post a job with a hidden suite, and delete the suite once the job ends.
+//!
+//! Posting is three transactions: `post_job` locks the reward, `commit_suite`
+//! fixes the suite and reference hashes and freezes the grader key, and the
+//! suite and reference are stored, encrypted, for that grader build. If a later step
+//! fails, calling again with the returned `job_id` finishes only the steps
+//! still missing.
+
+use schemars::JsonSchema;
+use serde::Deserialize;
+use serde_json::{json, Value};
+use sphinx_near::hidden_suite::{
+    grader_target, profile_for_job, secret_values, Keystore, SuiteTarget,
+};
+use sphinx_near::views::{Config, Job, JobStatus};
+use sphinx_protocol::{Code, SphinxError};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use crate::{internal, need_identity, optional_job_id, yocto, SphinxMcp};
+
+const NS_PER_HOUR: u64 = 3_600_000_000_000;
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct PostJob {
+    /// The hidden test suite as JSON text: {"version":1,"runtime":"js-boa/1","entry":"<function name>","tests":[{"args":[...],"expected":...}]}. Agents never see it.
+    pub suite: String,
+    /// A reference solution (JavaScript) that passes every test. It is checked here before anything is posted, and again in the enclave. Agents never see it.
+    pub reference: String,
+    /// Where agents read the task description (an https:// URL). Give this or `spec`.
+    pub spec_uri: Option<String>,
+    /// The task description itself; it is stored through the job API and its URL is used. Give this or `spec_uri`.
+    pub spec: Option<String>,
+    /// Reward paid to the first submission that passes every test, in NEAR as a decimal string, e.g. "0.5".
+    pub reward_near: String,
+    /// Bond each submission locks, in NEAR as a decimal string, e.g. "0.01". Forfeited to you when a submission fails.
+    pub bond_near: String,
+    /// Graded attempts each agent may make.
+    pub max_subs_per_agent: u32,
+    /// Submissions the job accepts in total.
+    pub max_subs_total: u32,
+    /// Hours until submissions close.
+    pub deadline_hours: u32,
+    /// Resume a job this tool posted earlier whose later steps did not finish. The suite and reference must be the same.
+    #[serde(default, deserialize_with = "optional_job_id")]
+    pub job_id: Option<u64>,
+    /// Hire directly: only these agent accounts may submit (at most 8). Omit to open the job to every agent.
+    #[serde(default)]
+    pub invited: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DeleteSuite {
+    /// The ended job whose hidden suite should be deleted.
+    #[serde(deserialize_with = "crate::job_id")]
+    pub job_id: u64,
+}
+
+fn now_ns() -> Result<u64, SphinxError> {
+    let since = SystemTime::now().duration_since(UNIX_EPOCH).map_err(internal)?;
+    u64::try_from(since.as_nanos()).map_err(internal)
+}
+
+impl SphinxMcp {
+    /// Commits the suite and reference hashes with the grader key whose
+    /// attestation was just checked. The contract refuses the commit if the
+    /// registered key changed in between.
+    async fn commit_checked(
+        &self,
+        job: &Job,
+        score: &sphinx_grader::LocalScore,
+    ) -> Result<Value, SphinxError> {
+        let config: Config = self.settings.escrow.view("get_config", json!({})).await?;
+        let grader = config.grader.as_ref().ok_or_else(|| {
+            SphinxError::new(
+                Code::CommitNoGraderKey,
+                "no grader key is registered on the escrow yet",
+            )
+        })?;
+        grader_target(grader).await?;
+        self.write(
+            "commit_suite",
+            json!({
+                "job_id": job.id,
+                "suite_hash": score.suite_hash,
+                "ref_solution_hash": score.code_hash,
+                "grader_public_key": grader.public_key,
+            }),
+            0,
+        )
+        .await
+    }
+
+    pub(crate) async fn post_job(&self, p: PostJob) -> Result<Value, SphinxError> {
+        let id = self.settings.identity.as_ref().ok_or_else(need_identity)?;
+        let score = sphinx_grader::local_score(&p.suite, &p.reference, 0)?;
+        if score.passed != score.total {
+            return Err(SphinxError::new(
+                Code::CliReferenceFails,
+                format!(
+                    "the reference passes {} of {} tests; it must pass all of them",
+                    score.passed, score.total
+                ),
+            )
+            .ctx("passed", score.passed)
+            .ctx("total", score.total));
+        }
+        let mut steps = Vec::new();
+        let mut job = if let Some(job_id) = p.job_id {
+            self.own_job(job_id, id.account.as_ref()).await?
+        } else {
+            let job_id = self.post(&p).await?;
+            steps.push(json!({ "step": "post_job", "job_id": job_id.to_string() }));
+            self.job(job_id).await?
+        };
+        let job_id = job.id_u64();
+        let resume = |e: SphinxError| e.ctx("resume_with_job_id", job_id);
+
+        if job.status == JobStatus::Draft {
+            let receipt = self.commit_checked(&job, &score).await.map_err(resume)?;
+            steps.push(json!({ "step": "commit_suite", "tx_hash": receipt["tx_hash"] }));
+            job = self.job(job_id).await.map_err(resume)?;
+        }
+        let commit = job.commit.as_ref().ok_or_else(|| {
+            resume(SphinxError::new(
+                Code::JobWrongState,
+                format!("job {job_id} is {:?} and has no committed suite", job.status),
+            ))
+        })?;
+        if commit.suite_hash != score.suite_hash || commit.ref_solution_hash != score.code_hash {
+            return Err(SphinxError::new(
+                Code::CliUsage,
+                format!("job {job_id} was committed with a different suite or reference"),
+            )
+            .ctx("job_id", job_id)
+            .ctx("committed_suite_hash", commit.suite_hash)
+            .ctx("given_suite_hash", score.suite_hash));
+        }
+
+        let target = grader_target(&commit.grader).await.map_err(resume)?;
+        let keystore = Keystore::for_account(self.settings.escrow.contract_id().as_str());
+        let profile = profile_for_job(job_id);
+        let network = self.settings.escrow.network();
+        if keystore
+            .is_stored(network, &id.account, &profile, &target.wasm_sha256)
+            .await
+            .map_err(resume)?
+        {
+            steps.push(json!({ "step": "store_suite", "already": true }));
+        } else {
+            let values = secret_values(
+                self.settings.escrow.contract_id().as_str(),
+                job_id,
+                p.suite.clone(),
+                p.reference.clone(),
+            );
+            let outcome = keystore
+                .store(
+                    network,
+                    id.account.clone(),
+                    id.signer.clone(),
+                    &profile,
+                    &target.wasm_sha256,
+                    &target.caller,
+                    &values,
+                )
+                .await
+                .map_err(resume)?;
+            steps.push(json!({ "step": "store_suite", "tx_hash": outcome.tx_hash }));
+        }
+        Ok(json!({
+            "job_id": job.id,
+            "status": job.status,
+            "spec_uri": job.spec_uri,
+            "suite_hash": score.suite_hash,
+            "ref_solution_hash": score.code_hash,
+            "tests": score.total,
+            "readable_by": readable_by(&target),
+            "steps": steps,
+            "next_step": "the Sphinx relayer now checks the reference against the hidden suite inside the enclave; the job opens to agents when it passes. Follow it with sphinx_jobs(job_id). After the job ends, call sphinx_manage_job with action delete_suite to delete the suite and get its storage deposit back.",
+        }))
+    }
+
+    pub(crate) async fn delete_suite(&self, job_id: u64) -> Result<Value, SphinxError> {
+        let id = self.settings.identity.as_ref().ok_or_else(need_identity)?;
+        let job = self.own_job(job_id, id.account.as_ref()).await?;
+        let ended = matches!(
+            job.status,
+            JobStatus::Paid | JobStatus::Rejected | JobStatus::Refunded | JobStatus::Cancelled
+        );
+        if !ended {
+            return Err(SphinxError::new(
+                Code::CliSuiteDeleteTooEarly,
+                format!("job {job_id} is {:?}; it still needs its hidden suite", job.status),
+            )
+            .ctx("job_id", job_id)
+            .ctx("status", format!("{:?}", job.status)));
+        }
+        let Some(commit) = job.commit.as_ref() else {
+            return Ok(
+                json!({ "job_id": job.id, "deleted": false, "reason": "the job never had a suite" }),
+            );
+        };
+        let wasm = commit.grader.wasm_sha256.to_string();
+        let keystore = Keystore::for_account(self.settings.escrow.contract_id().as_str());
+        let profile = profile_for_job(job_id);
+        let network = self.settings.escrow.network();
+        if !keystore.is_stored(network, &id.account, &profile, &wasm).await? {
+            return Ok(
+                json!({ "job_id": job.id, "deleted": false, "reason": "no hidden suite is stored for this job" }),
+            );
+        }
+        let outcome = keystore
+            .delete(network, id.account.clone(), id.signer.clone(), &profile, &wasm)
+            .await?;
+        Ok(json!({ "job_id": job.id, "deleted": true, "tx_hash": outcome.tx_hash }))
+    }
+
+    /// Posts the job and returns its id.
+    async fn post(&self, p: &PostJob) -> Result<u64, SphinxError> {
+        let spec_uri = match (&p.spec_uri, &p.spec) {
+            (Some(uri), None) => uri.clone(),
+            (None, Some(text)) => self.store_code(text.clone()).await?,
+            _ => {
+                return Err(SphinxError::new(
+                    Code::CliUsage,
+                    "give exactly one of spec_uri (a URL) or spec (the description text)",
+                ))
+            }
+        };
+        let config: Config = self.settings.escrow.view("get_config", json!({})).await?;
+        let reward = sphinx_near::parse_near(&p.reward_near)?;
+        let bond = sphinx_near::parse_near(&p.bond_near)?;
+        let deadline_ns = now_ns()?.saturating_add(u64::from(p.deadline_hours) * NS_PER_HOUR);
+        let runtime = serde_json::from_str::<Value>(&p.suite)
+            .ok()
+            .and_then(|v| v["runtime"].as_str().map(str::to_owned))
+            .unwrap_or_default();
+        let deposit = reward.saturating_add(yocto(&config.job_storage_deposit));
+        let receipt = self
+            .write(
+                "post_job",
+                json!({
+                    "spec_uri": spec_uri,
+                    "runtime": runtime,
+                    "reward": reward.to_string(),
+                    "bond": bond.to_string(),
+                    "max_subs_per_agent": p.max_subs_per_agent,
+                    "max_subs_total": p.max_subs_total,
+                    "deadline_ns": deadline_ns.to_string(),
+                    "invited": p.invited,
+                }),
+                deposit,
+            )
+            .await?;
+        receipt["returned"]
+            .as_str()
+            .and_then(|s| s.parse().ok())
+            .ok_or_else(|| internal("post_job returned no job id"))
+    }
+
+    /// A job owned by `account`.
+    async fn own_job(&self, job_id: u64, account: &str) -> Result<Job, SphinxError> {
+        let job = self.job(job_id).await?;
+        if job.buyer != account {
+            return Err(SphinxError::new(
+                Code::CliUsage,
+                format!("job {job_id} belongs to {}, not {account}", job.buyer),
+            )
+            .ctx("job_id", job_id)
+            .ctx("buyer", &job.buyer));
+        }
+        Ok(job)
+    }
+}
+
+fn readable_by(t: &SuiteTarget) -> Value {
+    json!({ "grader_wasm_sha256": t.wasm_sha256, "caller": t.caller, "attestation": t.attestation_ref })
+}

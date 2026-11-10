@@ -1,0 +1,30 @@
+{
+  "public_key": "197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61",
+  "result": {
+    "message": "sphinx:v1:score:sphinx.example.testnet:7:3:js-boa/1:12:12:f8ebd43dbef1f029bf4930c65c9b7c5cc76af476927cee861ff18fcc73bfc4ab:5694d08a2e53ffcae0c3103e5ad6f6076abd960eb1f8a56577040bc1028f702b:9be439e9fc32ec28567c384b0906425cb38da919139294787ccc5f5176443834",
+    "result": {
+      "code_hash": "5694d08a2e53ffcae0c3103e5ad6f6076abd960eb1f8a56577040bc1028f702b",
+      "contract": "sphinx.example.testnet",
+      "job_id": "7",
+      "nonce": "9be439e9fc32ec28567c384b0906425cb38da919139294787ccc5f5176443834",
+      "passed": 12,
+      "runtime": "js-boa/1",
+      "sub_id": 3,
+      "suite_hash": "f8ebd43dbef1f029bf4930c65c9b7c5cc76af476927cee861ff18fcc73bfc4ab",
+      "total": 12
+    },
+    "signature": "fd1aca19b396298ac0e4f8e28a14d2d7066a9a9c492a9a2deccba80afa215d978a7ab86d6204b4c6c85333ce56731834f9ccad427f8a54e297abb6706203640b"
+  },
+  "validate": {
+    "message": "sphinx:v1:suite-check:sphinx.example.testnet:7:true:f8ebd43dbef1f029bf4930c65c9b7c5cc76af476927cee861ff18fcc73bfc4ab:52367a6622b19f08825e915fad80c542ad4f4c34dbcebad9f5007994b3e39208:e4c5410bbba83ac74b5498dd6246d15157f241860dea39e416355c0569a50dad",
+    "result": {
+      "contract": "sphinx.example.testnet",
+      "job_id": "7",
+      "nonce": "e4c5410bbba83ac74b5498dd6246d15157f241860dea39e416355c0569a50dad",
+      "ref_solution_hash": "52367a6622b19f08825e915fad80c542ad4f4c34dbcebad9f5007994b3e39208",
+      "suite_hash": "f8ebd43dbef1f029bf4930c65c9b7c5cc76af476927cee861ff18fcc73bfc4ab",
+      "valid": true
+    },
+    "signature": "156c740fd7090ca4f32e19f2877ee1049d8ad38a3bdd69da13bd33a1b4416c3004cb002c64c37e88dfab5e5a2e22a4844ab0490ef57ec6299a597c642e80cc05"
+  }
+}

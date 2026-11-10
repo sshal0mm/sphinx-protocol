@@ -1,0 +1,17 @@
+[package]
+name = "sphinx-mcp-client"
+description = "Starts the Sphinx MCP server as a child process and calls its tools, for Sphinx's own command-line programs."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+rmcp = { version = "3", features = ["client", "transport-child-process"] }
+tokio = { version = "1", features = ["process"] }
+serde_json.workspace = true
+
+[lints]
+workspace = true

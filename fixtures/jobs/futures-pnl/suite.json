@@ -1,0 +1,240 @@
+{
+  "version": 1,
+  "runtime": "js-boa/1",
+  "entry": "futuresPnl",
+  "tests": [
+    {
+      "args": [
+        "ES",
+        "long",
+        "5432.25",
+        "5440.00",
+        2
+      ],
+      "expected": {
+        "ticks": 31,
+        "pnl_cents": 77500
+      }
+    },
+    {
+      "args": [
+        "CL",
+        "short",
+        "78.40",
+        "78.95",
+        1
+      ],
+      "expected": {
+        "ticks": -55,
+        "pnl_cents": -55000
+      }
+    },
+    {
+      "args": [
+        "NQ",
+        "short",
+        "19850.50",
+        "19800",
+        3
+      ],
+      "expected": {
+        "ticks": 202,
+        "pnl_cents": 303000
+      }
+    },
+    {
+      "args": [
+        "MES",
+        "long",
+        "5000",
+        "4999.75",
+        10
+      ],
+      "expected": {
+        "ticks": -1,
+        "pnl_cents": -1250
+      }
+    },
+    {
+      "args": [
+        "MNQ",
+        "long",
+        "20000.25",
+        "20100.25",
+        1
+      ],
+      "expected": {
+        "ticks": 400,
+        "pnl_cents": 20000
+      }
+    },
+    {
+      "args": [
+        "GC",
+        "long",
+        "2650.0",
+        "2671.3",
+        4
+      ],
+      "expected": {
+        "ticks": 213,
+        "pnl_cents": 852000
+      }
+    },
+    {
+      "args": [
+        "6E",
+        "long",
+        "1.08455",
+        "1.08550",
+        2
+      ],
+      "expected": {
+        "ticks": 19,
+        "pnl_cents": 23750
+      }
+    },
+    {
+      "args": [
+        "6E",
+        "short",
+        "1.10000",
+        "1.09995",
+        1
+      ],
+      "expected": {
+        "ticks": 1,
+        "pnl_cents": 625
+      }
+    },
+    {
+      "args": [
+        "ES",
+        "long",
+        "5432.10",
+        "5440.00",
+        1
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "GC",
+        "long",
+        "2650.05",
+        "2651",
+        1
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "ZN",
+        "long",
+        "110",
+        "111",
+        1
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "ES",
+        "flat",
+        "5000",
+        "5001",
+        1
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "ES",
+        "long",
+        "5000",
+        "5001",
+        0
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "ES",
+        "long",
+        "5000",
+        "5001",
+        1.5
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "ES",
+        "long",
+        "5,000",
+        "5001",
+        1
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "ES",
+        "long",
+        "5000.",
+        "5001",
+        1
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "CL",
+        "long",
+        "-37.63",
+        "10.01",
+        1
+      ],
+      "expected": {
+        "ticks": 4764,
+        "pnl_cents": 4764000
+      }
+    },
+    {
+      "args": [
+        "ES",
+        "long",
+        "5000",
+        "5000",
+        7
+      ],
+      "expected": {
+        "ticks": 0,
+        "pnl_cents": 0
+      }
+    },
+    {
+      "args": [
+        "CL",
+        "long",
+        "70.000001",
+        "71",
+        1
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "6E",
+        "long",
+        "1.0845",
+        "1.1",
+        1
+      ],
+      "expected": {
+        "ticks": 310,
+        "pnl_cents": 193750
+      }
+    }
+  ]
+}

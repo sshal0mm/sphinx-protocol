@@ -1,0 +1,161 @@
+# Sphinx on one server: no published ports, reached only through its own
+# Cloudflare Tunnel. Values come from deploy/.env on the server (never in
+# git); each service gets only the secrets it uses.
+name: sphinx
+x-common: &common
+  restart: unless-stopped
+  networks: [sphinx]
+  logging: { driver: json-file, options: { max-size: "20m", max-file: "5" } }
+x-chain: &chain
+  SPHINX_CONTRACT: ${SPHINX_CONTRACT}
+  SPHINX_RPC_KEY: ${SPHINX_RPC_KEY}
+  SPHINX_API_PUBLIC_BASE: https://${SPHINX_PUBLIC_HOST}
+
+services:
+  api:
+    <<: *common
+    build: { context: .., dockerfile: deploy/Dockerfile, target: services }
+    image: sphinx-services
+    command: ["sphinx-api"]
+    environment:
+      <<: *chain
+      SPHINX_API_ADDR: 0.0.0.0:8787
+      SPHINX_CODE_DIR: /data/code
+      SPHINX_CODE_READER_TOKEN: ${SPHINX_CODE_READER_TOKEN}
+      SPHINX_RELAYER_ACCOUNT: ${SPHINX_GAS_ACCOUNT}
+      SPHINX_RELAYER_KEY: ${SPHINX_GAS_KEY}
+    volumes: ["./data/code:/data/code"]
+
+  relayer:
+    <<: *common
+    image: sphinx-services
+    depends_on: [api]
+    command: ["sphinx-relayer"]
+    environment:
+      <<: *chain
+      SPHINX_API: http://api:8787
+      SPHINX_CODE_READER_TOKEN: ${SPHINX_CODE_READER_TOKEN}
+      SPHINX_GRADER_URL: ${SPHINX_GRADER_URL}
+      SPHINX_GRADER_SHA256: ${SPHINX_GRADER_SHA256}
+      SPHINX_RELAYER_ACCOUNT: ${SPHINX_GRADER_CALLER}
+      SPHINX_RELAYER_KEY: ${SPHINX_GRADER_CALLER_KEY}
+
+  house:
+    <<: *common
+    image: sphinx-services
+    depends_on: [api]
+    command: ["sphinx-house"]
+    environment:
+      <<: *chain
+      HOUSE_ADDR: 0.0.0.0:8792
+      HOUSE_DIR: /data/house
+      SPHINX_API: http://api:8787
+      SPHINX_RELAYER_ACCOUNT: ${SPHINX_GRADER_CALLER}
+      SPHINX_MODEL_KEY: ${SPHINX_MODEL_KEY}
+    volumes: ["./data/house:/data/house"]
+
+  # The public, read-only MCP server at /mcp.
+  mcp-public:
+    <<: *common
+    image: sphinx-services
+    depends_on: [api]
+    command: ["sphinx-mcp", "--http", "0.0.0.0:8790", "--read-only"]
+    environment:
+      SPHINX_CONTRACT: ${SPHINX_CONTRACT}
+      SPHINX_API: http://api:8787
+      SPHINX_MCP_HOSTS: ${SPHINX_PUBLIC_HOST}
+
+  # What the tunnel reaches as http://mcp:8790: /mcp goes to the public
+  # read-only server, and each private connector at /mcp/<token> to its own
+  # signing server. Those servers and their routes are defined only on the
+  # server (data/agents.compose.yml, data/mcp-routes), never in git.
+  mcp:
+    <<: *common
+    image: nginx:1.27.3-alpine
+    depends_on: [mcp-public]
+    volumes:
+      - ./mcp-gateway.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./data/mcp-routes:/etc/nginx/mcp-routes:ro
+
+  # ---- mainnet: the same services for the mainnet contract. They start only
+  # with the mainnet profile, which deploy.sh turns on once
+  # SPHINX_MAINNET_CONTRACT is set in deploy/.env. Their data lives apart, in
+  # data/mainnet, and mainnet jobs record links under /mainnet.
+  api-mainnet:
+    <<: *common
+    profiles: [mainnet]
+    image: sphinx-services
+    command: ["sphinx-api"]
+    environment:
+      SPHINX_CONTRACT: ${SPHINX_MAINNET_CONTRACT:-}
+      SPHINX_RPC_KEY: ${SPHINX_RPC_KEY}
+      SPHINX_API_PUBLIC_BASE: https://${SPHINX_PUBLIC_HOST}/mainnet
+      SPHINX_API_ADDR: 0.0.0.0:8787
+      SPHINX_CODE_DIR: /data/code
+      SPHINX_CODE_READER_TOKEN: ${SPHINX_MAINNET_CODE_READER_TOKEN:-}
+      SPHINX_RELAYER_ACCOUNT: ${SPHINX_MAINNET_GAS_ACCOUNT:-}
+      SPHINX_RELAYER_KEY: ${SPHINX_MAINNET_GAS_KEY:-}
+    volumes: ["./data/mainnet/code:/data/code"]
+
+  relayer-mainnet:
+    <<: *common
+    profiles: [mainnet]
+    image: sphinx-services
+    depends_on: [api-mainnet]
+    command: ["sphinx-relayer"]
+    environment:
+      SPHINX_CONTRACT: ${SPHINX_MAINNET_CONTRACT:-}
+      SPHINX_RPC_KEY: ${SPHINX_RPC_KEY}
+      SPHINX_API_PUBLIC_BASE: https://${SPHINX_PUBLIC_HOST}/mainnet
+      SPHINX_API: http://api-mainnet:8787
+      SPHINX_CODE_READER_TOKEN: ${SPHINX_MAINNET_CODE_READER_TOKEN:-}
+      SPHINX_GRADER_URL: ${SPHINX_MAINNET_GRADER_URL:-}
+      SPHINX_GRADER_SHA256: ${SPHINX_MAINNET_GRADER_SHA256:-}
+      SPHINX_RELAYER_ACCOUNT: ${SPHINX_MAINNET_GRADER_CALLER:-}
+      SPHINX_RELAYER_KEY: ${SPHINX_MAINNET_GRADER_CALLER_KEY:-}
+
+  house-mainnet:
+    <<: *common
+    profiles: [mainnet]
+    image: sphinx-services
+    depends_on: [api-mainnet]
+    command: ["sphinx-house"]
+    environment:
+      SPHINX_CONTRACT: ${SPHINX_MAINNET_CONTRACT:-}
+      SPHINX_RPC_KEY: ${SPHINX_RPC_KEY}
+      SPHINX_API_PUBLIC_BASE: https://${SPHINX_PUBLIC_HOST}/mainnet
+      HOUSE_ADDR: 0.0.0.0:8792
+      HOUSE_DIR: /data/house
+      SPHINX_API: http://api-mainnet:8787
+      SPHINX_RELAYER_ACCOUNT: ${SPHINX_MAINNET_GRADER_CALLER:-}
+      SPHINX_MODEL_KEY: ${SPHINX_MODEL_KEY}
+    volumes: ["./data/mainnet/house:/data/house"]
+
+  mcp-public-mainnet:
+    <<: *common
+    profiles: [mainnet]
+    image: sphinx-services
+    depends_on: [api-mainnet]
+    command: ["sphinx-mcp", "--http", "0.0.0.0:8790", "--read-only"]
+    environment:
+      SPHINX_CONTRACT: ${SPHINX_MAINNET_CONTRACT:-}
+      SPHINX_API: http://api-mainnet:8787
+      SPHINX_MCP_HOSTS: ${SPHINX_PUBLIC_HOST}
+
+  # The bare static site; /v1, /testnet/v1 and /mainnet/v1 reach the APIs.
+  web:
+    <<: *common
+    build: { context: .., dockerfile: deploy/Dockerfile, target: site }
+    image: sphinx-site
+    depends_on: [api]
+
+  cloudflared:
+    <<: *common
+    image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-2026.10.3}
+    depends_on: [web, mcp]
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+
+networks:
+  sphinx: {}

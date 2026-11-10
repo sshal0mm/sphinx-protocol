@@ -1,0 +1,61 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+# The contract only compiles via `cargo near build` (wasm) or under test (unit-testing
+# feature), so plain `cargo build` covers the native crates. See the Makefile.
+default-members = ["crates/sphinx-box", "crates/sphinx-grader", "crates/sphinx-cli", "crates/sphinx-near", "crates/sphinx-api", "crates/sphinx-relayer", "crates/sphinx-mcp", "crates/sphinx-agent", "crates/sphinx-model", "crates/sphinx-mcp-client", "crates/sphinx-concierge"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.95"
+license = "MIT"
+authors = ["sshal0mm"]
+
+[workspace.dependencies]
+near-sdk = "5.30"
+boa_engine = { version = "0.22", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+hex = "0.4"
+ed25519-dalek = "2"
+rand = "0.8"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+unused_qualifications = "warn"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "warn"
+dbg_macro = "deny"
+todo = "deny"
+print_stdout = "warn"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+
+# Contract: smallest wasm. Grader overrides below because the enclave bills
+# instructions, not bytes.
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+overflow-checks = true
+debug = false
+
+[profile.release.package.boa_engine]
+opt-level = 3
+
+[profile.release.package.sphinx-grader]
+opt-level = 3
+
+# Boa is too slow unoptimized for the grader test suite.
+[profile.dev.package.boa_engine]
+opt-level = 2

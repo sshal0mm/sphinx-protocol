@@ -1,0 +1,35 @@
+[package]
+name = "sphinx-cli"
+description = "Command-line tools for Sphinx: suite hashing and checks, local grading, error explanations."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[features]
+default = []
+# Adds `sphinx dev ...` and lets `sphinx grade` sign with a local dev key.
+dev-signer = ["sphinx-grader/dev-signer", "dep:rand"]
+
+[[bin]]
+name = "sphinx"
+path = "src/main.rs"
+
+[dependencies]
+sphinx-protocol = { path = "../sphinx-protocol" }
+sphinx-grader = { path = "../sphinx-grader" }
+sphinx-near = { path = "../sphinx-near" }
+tokio = { version = "1", features = ["rt-multi-thread"] }
+clap = { version = "4", features = ["derive", "env"] }
+serde_json.workspace = true
+hex.workspace = true
+ed25519-dalek = { workspace = true, features = ["rand_core"] }
+base64 = "0.22"
+rand = { workspace = true, optional = true }
+dcap-qvl = "0.7.1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+
+[lints]
+workspace = true

@@ -1,0 +1,241 @@
+{
+  "version": 1,
+  "runtime": "js-boa/1",
+  "entry": "maxDrawdown",
+  "tests": [
+    {
+      "args": [
+        [
+          100,
+          120,
+          90,
+          130,
+          104,
+          140
+        ]
+      ],
+      "expected": {
+        "dd_bps": 2500,
+        "peak": 1,
+        "trough": 2
+      }
+    },
+    {
+      "args": [
+        []
+      ],
+      "expected": {
+        "dd_bps": 0,
+        "peak": null,
+        "trough": null
+      }
+    },
+    {
+      "args": [
+        [
+          100
+        ]
+      ],
+      "expected": {
+        "dd_bps": 0,
+        "peak": null,
+        "trough": null
+      }
+    },
+    {
+      "args": [
+        [
+          100,
+          110,
+          120,
+          130
+        ]
+      ],
+      "expected": {
+        "dd_bps": 0,
+        "peak": null,
+        "trough": null
+      }
+    },
+    {
+      "args": [
+        [
+          100,
+          50
+        ]
+      ],
+      "expected": {
+        "dd_bps": 5000,
+        "peak": 0,
+        "trough": 1
+      }
+    },
+    {
+      "args": [
+        [
+          100,
+          100,
+          100
+        ]
+      ],
+      "expected": {
+        "dd_bps": 0,
+        "peak": null,
+        "trough": null
+      }
+    },
+    {
+      "args": [
+        [
+          100,
+          90,
+          100,
+          90
+        ]
+      ],
+      "expected": {
+        "dd_bps": 1000,
+        "peak": 0,
+        "trough": 1
+      }
+    },
+    {
+      "args": [
+        [
+          200,
+          150,
+          300,
+          225
+        ]
+      ],
+      "expected": {
+        "dd_bps": 2500,
+        "peak": 0,
+        "trough": 1
+      }
+    },
+    {
+      "args": [
+        [
+          100,
+          99,
+          98,
+          97,
+          50,
+          60,
+          40,
+          200
+        ]
+      ],
+      "expected": {
+        "dd_bps": 6000,
+        "peak": 0,
+        "trough": 6
+      }
+    },
+    {
+      "args": [
+        [
+          3,
+          2,
+          3,
+          1
+        ]
+      ],
+      "expected": {
+        "dd_bps": 6666,
+        "peak": 0,
+        "trough": 3
+      }
+    },
+    {
+      "args": [
+        [
+          1000000,
+          999999
+        ]
+      ],
+      "expected": {
+        "dd_bps": 0,
+        "peak": 0,
+        "trough": 1
+      }
+    },
+    {
+      "args": [
+        [
+          7,
+          3
+        ]
+      ],
+      "expected": {
+        "dd_bps": 5714,
+        "peak": 0,
+        "trough": 1
+      }
+    },
+    {
+      "args": [
+        [
+          100,
+          80,
+          120,
+          96,
+          130,
+          104
+        ]
+      ],
+      "expected": {
+        "dd_bps": 2000,
+        "peak": 0,
+        "trough": 1
+      }
+    },
+    {
+      "args": [
+        [
+          50,
+          100,
+          100,
+          60,
+          100,
+          40
+        ]
+      ],
+      "expected": {
+        "dd_bps": 6000,
+        "peak": 1,
+        "trough": 5
+      }
+    },
+    {
+      "args": [
+        [
+          300,
+          200,
+          100,
+          400,
+          100
+        ]
+      ],
+      "expected": {
+        "dd_bps": 7500,
+        "peak": 3,
+        "trough": 4
+      }
+    },
+    {
+      "args": [
+        [
+          9007199,
+          1
+        ]
+      ],
+      "expected": {
+        "dd_bps": 9999,
+        "peak": 0,
+        "trough": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+[package]
+name = "sphinx-concierge"
+description = "Turns a buyer's plain request into a checked Sphinx job: a task description, a hidden suite whose expected values come from a reference, a second-opinion check, and agents recommended from the on-chain directory."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[[bin]]
+name = "sphinx-concierge"
+path = "src/main.rs"
+
+[dependencies]
+sphinx-protocol = { path = "../sphinx-protocol" }
+sphinx-grader = { path = "../sphinx-grader", features = ["evaluate"] }
+sphinx-model = { path = "../sphinx-model" }
+sphinx-mcp-client = { path = "../sphinx-mcp-client" }
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "io-std", "io-util"] }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+hex.workspace = true
+
+[lints]
+workspace = true

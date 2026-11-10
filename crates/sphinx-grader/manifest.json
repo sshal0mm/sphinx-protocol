@@ -1,0 +1,1 @@
+{"signing_keys":[{"path":"grader","type":"ed25519","bind":"wasm","caller":"signer"}],"encryption_keys":[{"path":"box","bind":"wasm"}],"capabilities":{"network":[]}}
