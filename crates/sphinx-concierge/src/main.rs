@@ -33,7 +33,12 @@ const YOCTO: u128 = 1_000_000_000_000_000_000_000_000;
 #[allow(clippy::struct_excessive_bools)]
 struct Args {
     /// What you want done, in plain words.
-    request: String,
+    #[arg(required_unless_present = "post_draft")]
+    request: Option<String>,
+    /// Post a draft made earlier (its id, the folder name under the drafts
+    /// folder) instead of drafting again, with the terms it was drafted with.
+    #[arg(long, value_name = "DRAFT_ID")]
+    post_draft: Option<String>,
     /// Reward for the first full pass, in NEAR.
     #[arg(long, default_value = "0.5")]
     reward: String,
@@ -200,23 +205,29 @@ async fn run(args: Args) -> Result<(), String> {
         }
         None => "no model configured".to_owned(),
     };
-    println!("▸ drafting the job ({note}), with a second-opinion check");
-    let review = mcp
-        .call(
-            "sphinx_concierge",
-            json!({
-                "action": "draft",
-                "request": args.request,
-                "reward_near": args.reward,
-                "bond_near": args.bond,
-                "deadline_hours": args.hours,
-                "max_subs_per_agent": args.attempts,
-                "max_subs_total": args.attempts.saturating_mul(4),
-            }),
-        )
-        .await
-        .map_err(|e| e.to_string())?;
-    show_review(&review);
+    let review = if let Some(id) = &args.post_draft {
+        println!("▸ posting the saved draft {id}, with the terms it was drafted with");
+        json!({ "draft_id": id })
+    } else {
+        println!("▸ drafting the job ({note}), with a second-opinion check");
+        let review = mcp
+            .call(
+                "sphinx_concierge",
+                json!({
+                    "action": "draft",
+                    "request": args.request.clone().unwrap_or_default(),
+                    "reward_near": args.reward,
+                    "bond_near": args.bond,
+                    "deadline_hours": args.hours,
+                    "max_subs_per_agent": args.attempts,
+                    "max_subs_total": args.attempts.saturating_mul(4),
+                }),
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+        show_review(&review);
+        review
+    };
 
     let lock = format!("Post this job and lock {} NEAR?", args.reward);
     if !args.yes && !confirm(&lock).await {
