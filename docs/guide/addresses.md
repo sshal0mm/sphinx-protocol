@@ -20,15 +20,15 @@ order: 4
 |---|---|
 | contract | `escrow.sphinx999.testnet` |
 | owner | `sphinx999.testnet` |
-| grader build (SHA-256) | `6469c4d3f67b2402da52a66a0cccdb638eb9afdd596292f9d49b4301ceb39c20` |
-| grader signing key | `5c32135ac7384c9bec5c546b618228e5b93797a39c5097edf8e1f0593f8d9103` |
-| grader box key | `6c66c722c0f88fb1f89db2e9ad7b3e48e2b6d9a927d7cc03083a9ef77d09f965` |
+| grader build (SHA-256) | `60ba775f4163829baadc931de28c61493f6ed7dba352b34d2c18c10a68d17ff8` |
+| grader signing key | `ecb63574a5946ba626bfc6aa1232aba714a57c718b9d91efa6b119388bb5d8f6` |
+| grader box key | `45b9db0806544acd36f8c1f8fa62ec4bf8830aa524d006019de614c8d65d0502` |
 | grader caller | `relayer.sphinx999.testnet` |
-| grader source | tag `grader-6469c4d3` |
+| grader source | tag `grader-60ba775f` |
 | verifier fee | 5%, to `verifier.sphinx999.testnet` |
 | model | `deepseek-ai/DeepSeek-V4.1-Flash-1017` on NEAR AI Cloud |
 
-The key's attestation is on [OutLayer](https://testnet-api.outlayer.ai/attestations/by-tx/5NwPgoYqxdZguemo87MtNPyDGA6PHFVUfKpUjkRCnmJQ) and the contract on [nearblocks](https://testnet.nearblocks.io/address/escrow.sphinx999.testnet). A new grader build gets a new key; each job keeps the key it was committed with, and the contract lists every key it has registered.
+The key's attestation is on [OutLayer](https://testnet-api.outlayer.ai/attestations/by-tx/CzExjTq4rFbppcqfwzcHw8bM49JJ39EuBBEcn7cxb7Lj) and the contract on [nearblocks](https://testnet.nearblocks.io/address/escrow.sphinx999.testnet). A new grader build gets a new key; each job keeps the key it was committed with, and the contract lists every key it has registered.
 
 ## mainnet
 

@@ -9,16 +9,16 @@
   "allow_dev_keys": false,
   "grader": {
     "mode": "outlayer_tdx",
-    "url": "https://test.fastfs.io/relayer.sphinx999.testnet/outlayer.testnet/6469c4d3f67b2402da52a66a0cccdb638eb9afdd596292f9d49b4301ceb39c20.wasm",
-    "wasm_sha256": "6469c4d3f67b2402da52a66a0cccdb638eb9afdd596292f9d49b4301ceb39c20",
-    "public_key": "5c32135ac7384c9bec5c546b618228e5b93797a39c5097edf8e1f0593f8d9103",
-    "box_public_key": "6c66c722c0f88fb1f89db2e9ad7b3e48e2b6d9a927d7cc03083a9ef77d09f965",
+    "url": "https://test.fastfs.io/relayer.sphinx999.testnet/outlayer.testnet/60ba775f4163829baadc931de28c61493f6ed7dba352b34d2c18c10a68d17ff8.wasm",
+    "wasm_sha256": "60ba775f4163829baadc931de28c61493f6ed7dba352b34d2c18c10a68d17ff8",
+    "public_key": "ecb63574a5946ba626bfc6aa1232aba714a57c718b9d91efa6b119388bb5d8f6",
+    "box_public_key": "45b9db0806544acd36f8c1f8fa62ec4bf8830aa524d006019de614c8d65d0502",
     "caller": "relayer.sphinx999.testnet",
-    "attestation": "https://testnet-api.outlayer.ai/attestations/by-tx/5oNSepJXsoTQEbCthK5KrKw6cWo6EVAEQXXZ8gHM8A1u",
-    "identity_tx": "5oNSepJXsoTQEbCthK5KrKw6cWo6EVAEQXXZ8gHM8A1u",
-    "registration_tx": "c2g3DW6GtwJvE5zkthh3wLNEQgzs3yvTC1PLmkLp6NF",
+    "attestation": "https://testnet-api.outlayer.ai/attestations/by-tx/CzExjTq4rFbppcqfwzcHw8bM49JJ39EuBBEcn7cxb7Lj",
+    "identity_tx": "CzExjTq4rFbppcqfwzcHw8bM49JJ39EuBBEcn7cxb7Lj",
+    "registration_tx": "6J4fVSgXdqNCTKZ5BfD2yyNm8gLTd553irTACGZ3SdJa",
     "hidden_suites": true,
-    "source_tag": "grader-6469c4d3"
+    "source_tag": "grader-60ba775f"
   },
   "archive": [
     {
@@ -39,6 +39,19 @@
     }
   ],
   "previous_graders": [
+    {
+      "mode": "outlayer_tdx",
+      "url": "https://test.fastfs.io/relayer.sphinx999.testnet/outlayer.testnet/6469c4d3f67b2402da52a66a0cccdb638eb9afdd596292f9d49b4301ceb39c20.wasm",
+      "wasm_sha256": "6469c4d3f67b2402da52a66a0cccdb638eb9afdd596292f9d49b4301ceb39c20",
+      "public_key": "5c32135ac7384c9bec5c546b618228e5b93797a39c5097edf8e1f0593f8d9103",
+      "box_public_key": "6c66c722c0f88fb1f89db2e9ad7b3e48e2b6d9a927d7cc03083a9ef77d09f965",
+      "caller": "relayer.sphinx999.testnet",
+      "attestation": "https://testnet-api.outlayer.ai/attestations/by-tx/5oNSepJXsoTQEbCthK5KrKw6cWo6EVAEQXXZ8gHM8A1u",
+      "identity_tx": "5oNSepJXsoTQEbCthK5KrKw6cWo6EVAEQXXZ8gHM8A1u",
+      "registration_tx": "c2g3DW6GtwJvE5zkthh3wLNEQgzs3yvTC1PLmkLp6NF",
+      "hidden_suites": true,
+      "source_tag": "grader-6469c4d3"
+    },
     {
       "mode": "outlayer_tdx",
       "url": "https://test.fastfs.io/relayer.sphinx999.testnet/outlayer.testnet/bd0b7d4f5b0e2109a613949747461042984513b8138aaabd5b17e6e2de0ee170.wasm",
