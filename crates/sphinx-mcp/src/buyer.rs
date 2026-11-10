@@ -216,6 +216,48 @@ impl SphinxMcp {
     }
 
     /// Posts the job and returns its id.
+    /// Refuses before anything is locked when the buyer cannot also pay to
+    /// store the hidden suite: OutLayer's keystore charges about 1.8e19
+    /// yoctoNEAR per byte of suite and reference (measured on mainnet), and
+    /// each call must hold its gas cap first. A job posted without the means
+    /// to store its suite would sit committed and never open.
+    async fn check_funds_for_job(
+        &self,
+        deposit: u128,
+        secret_bytes: usize,
+    ) -> Result<(), SphinxError> {
+        const PER_BYTE: u128 = 19_000_000_000_000_000_000;
+        const MARGIN: u128 = 50_000_000_000_000_000_000_000; // 0.05 NEAR: gas caps and fees
+        let id = self.settings.identity.as_ref().ok_or_else(need_identity)?;
+        let keystore = (secret_bytes as u128).saturating_mul(PER_BYTE);
+        let needed = deposit.saturating_add(keystore).saturating_add(MARGIN);
+        let balance = sphinx_near::near_api::Tokens::account(id.account.clone())
+            .near_balance()
+            .fetch_from(self.settings.escrow.network())
+            .await
+            .map_err(|e| {
+                SphinxError::new(Code::RelayRpcFailed, format!("view_account failed: {e}"))
+            })?
+            .total
+            .as_yoctonear();
+        if balance < needed {
+            return Err(SphinxError::new(
+                Code::CliUsage,
+                format!(
+                    "{} holds {} NEAR; posting this job needs about {} NEAR (reward and job storage {}, keystore deposit about {}, gas and fees 0.05); nothing was posted",
+                    id.account,
+                    sphinx_near::format_near(balance),
+                    sphinx_near::format_near(needed),
+                    sphinx_near::format_near(deposit),
+                    sphinx_near::format_near(keystore)
+                ),
+            )
+            .ctx("balance_yocto", balance)
+            .ctx("needed_yocto", needed));
+        }
+        Ok(())
+    }
+
     async fn post(&self, p: &PostJob) -> Result<u64, SphinxError> {
         let spec_uri = match (&p.spec_uri, &p.spec) {
             (Some(uri), None) => uri.clone(),
@@ -236,6 +278,7 @@ impl SphinxMcp {
             .and_then(|v| v["runtime"].as_str().map(str::to_owned))
             .unwrap_or_default();
         let deposit = reward.saturating_add(yocto(&config.job_storage_deposit));
+        self.check_funds_for_job(deposit, p.suite.len() + p.reference.len()).await?;
         let receipt = self
             .write(
                 "post_job",

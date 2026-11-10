@@ -39,6 +39,10 @@ struct Args {
     /// folder) instead of drafting again, with the terms it was drafted with.
     #[arg(long, value_name = "DRAFT_ID")]
     post_draft: Option<String>,
+    /// With --post-draft: finish a post of that draft that stopped halfway,
+    /// for the job it already created (only the missing steps run).
+    #[arg(long, value_name = "JOB_ID", requires = "post_draft")]
+    resume_job: Option<u64>,
     /// Reward for the first full pass, in NEAR.
     #[arg(long, default_value = "0.5")]
     reward: String,
@@ -242,6 +246,7 @@ async fn run(args: Args) -> Result<(), String> {
                 "draft_id": review["draft_id"],
                 "invite_recommended": args.invite_recommended,
                 "accept_differences": args.accept_differences,
+                "job_id": args.resume_job,
             }),
         )
         .await
