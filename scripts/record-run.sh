@@ -15,7 +15,7 @@ JOB="${1:?usage: scripts/record-run.sh <job_id>}"
 DEPLOYMENT="$SPHINX_ROOT/deployments/$NETWORK.json"
 CONTRACT="${SPHINX_CONTRACT:-$(jq -r .contract "$DEPLOYMENT")}"
 RPC="${SPHINX_RPC:-$DEFAULT_RPC}"
-TXAPI="${SPHINX_TX_API:-https://tx.test.fastnear.com}"
+TXAPI="${SPHINX_TX_API:-$TX_API}"
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 
 rpc() { # METHOD PARAMS_JSON, retried on rate limits

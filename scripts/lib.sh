@@ -15,12 +15,14 @@ if [ "$NETWORK" = mainnet ]; then
   OUTLAYER_API="${OUTLAYER_API:-https://api.outlayer.ai}"
   FASTFS_HOST="${FASTFS_HOST:-main.fastfs.io}"
   DEFAULT_RPC="https://rpc.mainnet.fastnear.com"
+  TX_API="https://tx.main.fastnear.com"
   EXPLORER="https://nearblocks.io"
 else
   OUTLAYER_CONTRACT="${OUTLAYER_CONTRACT:-outlayer.testnet}"
   OUTLAYER_API="${OUTLAYER_API:-https://testnet-api.outlayer.ai}"
   FASTFS_HOST="${FASTFS_HOST:-test.fastfs.io}"
   DEFAULT_RPC="https://rpc.testnet.fastnear.com"
+  TX_API="https://tx.test.fastnear.com"
   EXPLORER="https://testnet.nearblocks.io"
 fi
 
