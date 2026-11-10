@@ -84,7 +84,10 @@ impl Grader {
             .call_function("request_execution", args)
             .transaction()
             .deposit(deposit)
-            .gas(NearGas::from_tgas(300))
+            // A run burns about 8 Tgas, but the sender must hold all prepaid
+            // gas at a pessimistic price first (0.1 NEAR per 100 Tgas on
+            // mainnet). OutLayer needs room for its callback: 50 is too little.
+            .gas(NearGas::from_tgas(100))
             .with_signer(caller, signer)
             .send_to(network)
             .await

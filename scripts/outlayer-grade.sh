@@ -35,9 +35,14 @@ COST=$("$NEAR" contract call-function as-read-only "$OUTLAYER" estimate_executio
 # Attach the estimate exactly, in yoctoNEAR: rounding to NEAR decimals can
 # land just below it and the run is refused.
 DEPOSIT="$(python3 -c "print(int('$COST'))") yoctoNEAR"
+# A run burns about 8 Tgas, but NEAR makes the sender hold its whole prepaid
+# gas at a pessimistic price first (about 0.3 NEAR for 300 Tgas), so attach a
+# modest cap: OUTLAYER_GAS_TGAS, 100 by default (50 is too little: OutLayer
+# reserves gas for its callback). On mainnet the caller must hold about
+# 0.11 NEAR to send a run.
 
 "$NEAR" contract call-function as-transaction "$OUTLAYER" request_execution file-args "$WORK/args.json" \
-  prepaid-gas '300 Tgas' attached-deposit "$DEPOSIT" sign-as "$SPHINX_RELAYER" \
+  prepaid-gas "${OUTLAYER_GAS_TGAS:-100} Tgas" attached-deposit "$DEPOSIT" sign-as "$SPHINX_RELAYER" \
   network-config "$NETWORK" sign-with-keychain send >"$WORK/out" 2>"$WORK/err" || { cat "$WORK/err" >&2; exit 1; }
 grep -oE "Transaction ID: [A-Za-z0-9]+" "$WORK/err" "$WORK/out" | head -1 | sed "s/.*: /tx /" >&2 || true
 # The first run of a new build compiles it, and that can outlast the

@@ -10,6 +10,8 @@
 #   6. records the release in deployments/<network>.json (the previous one
 #      moves to previous_graders) and tags the source grader-<8 hex>.
 # Usage: scripts/release-grader.sh   (OWNER defaults to the contract's owner)
+# GRADER_URL=<https url serving the build> skips the FastFS upload; the file
+# there must hash to the build, which is checked before anything is paid.
 # shellcheck source=scripts/lib.sh
 source "$(dirname "$0")/lib.sh"
 load_env
@@ -33,11 +35,20 @@ WASM=$(sed -n 1p <<<"$OUT"); SHA=$(sed -n 2p <<<"$OUT")
 echo "   $SHA"
 [ "$SHA" != "$(jq -r .grader.wasm_sha256 "$DEPLOYMENT")" ] || { echo "   already the registered build; nothing to do"; exit 0; }
 
-echo "== upload"
-URL=""
-for _ in 1 2; do URL=$(scripts/fastfs-upload.sh "$WASM" "$CALLER" "$OUTLAYER_CONTRACT" "$NETWORK" 2>/dev/null) && break; URL=""; done
-[ -n "$URL" ] || { echo "FastFS did not serve the upload" >&2; exit 1; }
-echo "   $URL"
+if [ -n "${GRADER_URL:-}" ]; then
+  # Served from a host of our own (OutLayer checks the SHA-256 of what it
+  # downloads), which avoids paying gas to store megabytes on chain.
+  echo "== served at $GRADER_URL"
+  GOT=$(curl -sfL "$GRADER_URL" | shasum -a 256 | cut -d' ' -f1)
+  [ "$GOT" = "$SHA" ] || { echo "GRADER_URL serves $GOT, not this build $SHA" >&2; exit 1; }
+  URL="$GRADER_URL"
+else
+  echo "== upload"
+  URL=""
+  for _ in 1 2; do URL=$(scripts/fastfs-upload.sh "$WASM" "$CALLER" "$OUTLAYER_CONTRACT" "$NETWORK" 2>/dev/null) && break; URL=""; done
+  [ -n "$URL" ] || { echo "FastFS did not serve the upload" >&2; exit 1; }
+  echo "   $URL"
+fi
 
 echo "== identity run in the enclave"
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
