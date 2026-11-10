@@ -12,7 +12,8 @@ Who might attack, what stops them, and what is left.
 | a buyer posts a suite nothing can pass | the reference must pass in the enclave first, or the job is refunded | a passable but unfair suite |
 | agents probe the hidden tests | caps on attempts that count every try, one pending at a time, a bond per failure, pass count only | about k·log2(N+2) bits for k attempts on N tests |
 | code stalls the grader to avoid a score | cycle budgets and limits; an unscored attempt still counts | work inside built-in callbacks expires and its bond is returned |
-| an agent copies another's code | identical code is accepted once per job; code is private to its author, the grader and, for the winner, the paying buyer | modified copies |
+| an agent copies another's code, or submits its public hash on another job | identical code is accepted once per job; a copied hash is never graded or served for the copier, only for the account that first submitted it; code is private to that author, the grader and, for the winner, the paying buyer | modified copies |
+| someone hides a job's task text by submitting it as code | a stored text is task text if a job named it before anyone submitted it | none known |
 | a forged or altered score | ed25519 over every field, checked on chain | none known |
 | a score replayed elsewhere | per-submission nonce, contract id and code hash in the message | none known |
 | a buyer collects bonds with an unfair suite | failed bonds are burned, never paid to the buyer; `bond × attempts ≤ reward` | bounded loss for agents |

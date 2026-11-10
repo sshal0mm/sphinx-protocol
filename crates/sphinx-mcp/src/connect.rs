@@ -5,15 +5,20 @@
 //! connectors, without handing over their wallet's key:
 //!
 //! 1. `POST /connect/start {account}` makes a new ed25519 key and returns its
-//!    public half, the escrow contract, the methods it may call and the gas
-//!    allowance to grant.
+//!    public half, the escrow contract, the methods it may call, the gas
+//!    allowance to grant, and a one-time `claim` secret that only this caller
+//!    sees (the server keeps only its SHA-256).
 //! 2. The owner's own wallet adds that public key to their account as a
 //!    function-call key limited to the escrow and those methods, and
 //!    deposits a prepaid balance with `deposit_balance`. Only the owner can
 //!    add a key to their account, so this proves ownership.
-//! 3. `POST /connect/finish {account, public_key}` reads the key from the
-//!    chain and accepts it only with exactly that limit, then returns a
-//!    private connector address, `/mcp/<network>/<token>`.
+//! 3. `POST /connect/finish {account, public_key, claim}` checks the claim,
+//!    reads the key from the chain and accepts it only with exactly that
+//!    limit and an allowance no larger than the one asked for, then returns a
+//!    private connector address, `/mcp/<network>/<token>`. The account and
+//!    public key are public once the key is on chain; the claim is what keeps
+//!    someone watching the chain from finishing first. Each claim is used
+//!    once, and each key gets at most one connector.
 //!
 //! The server keeps only the limited key. It can submit work paid from the
 //! prepaid balance, collect, settle and reclaim; it cannot move the account's
@@ -72,7 +77,18 @@ struct Saved {
 struct Pending {
     account: String,
     secret_key: String,
+    claim_sha256: [u8; 32],
     at: Instant,
+}
+
+fn sha256(bytes: &[u8]) -> [u8; 32] {
+    use sha2::Digest;
+    sha2::Sha256::digest(bytes).into()
+}
+
+/// Compares two digests in time that does not depend on where they differ.
+fn same(a: &[u8; 32], b: &[u8; 32]) -> bool {
+    a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
 /// Shared state of the connect server.
@@ -108,6 +124,8 @@ struct StartBody {
 struct FinishBody {
     account: String,
     public_key: String,
+    #[serde(default)]
+    claim: String,
 }
 
 fn refuse(status: StatusCode, why: &str) -> Response {
@@ -133,15 +151,23 @@ fn new_key() -> (String, String) {
 
 /// Whether a key's on-chain permission is exactly a connector's: limited to
 /// `contract`, to a non-empty subset of [`ALLOWED_METHODS`], with a gas
-/// allowance.
+/// allowance of at most [`ALLOWANCE_YOCTO`] (an unlimited allowance is
+/// refused).
 fn permission_ok(permission: &Value, contract: &str) -> bool {
     let Some(fc) = permission.get("FunctionCall") else { return false };
     let receiver_ok = fc["receiver_id"].as_str() == Some(contract);
+    let allowance_ok = fc["allowance"]
+        .as_str()
+        .and_then(|a| a.parse::<u128>().ok())
+        .is_some_and(|a| a > 0 && a <= ALLOWANCE_YOCTO);
     let methods: Vec<&str> = fc["method_names"]
         .as_array()
         .map(|m| m.iter().filter_map(Value::as_str).collect())
         .unwrap_or_default();
-    receiver_ok && !methods.is_empty() && methods.iter().all(|m| ALLOWED_METHODS.contains(m))
+    receiver_ok
+        && allowance_ok
+        && !methods.is_empty()
+        && methods.iter().all(|m| ALLOWED_METHODS.contains(m))
 }
 
 impl Connect {
@@ -240,6 +266,26 @@ impl Connect {
         v["result"]["result"].is_array()
     }
 
+    /// Takes the waiting connection for `public_key` if `account` and `claim`
+    /// match, removing it under the same lock, so a claim works once even
+    /// when two requests race.
+    fn take_pending(&self, account: &str, public_key: &str, claim: &str) -> Option<Pending> {
+        let digest = sha256(claim.as_bytes());
+        let mut pending = self.pending.lock().ok()?;
+        let p = pending.get(public_key)?;
+        if p.account != account || p.at.elapsed() >= PENDING_FOR || !same(&p.claim_sha256, &digest) {
+            return None;
+        }
+        pending.remove(public_key)
+    }
+
+    /// Puts a taken connection back, for a retry once the key is on chain.
+    fn put_back(&self, public_key: &str, p: Pending) {
+        if let Ok(mut pending) = self.pending.lock() {
+            pending.insert(public_key.to_owned(), p);
+        }
+    }
+
     /// The MCP service of one connector, built on first use.
     fn service(&self, token: &str) -> Option<Service> {
         if let Some(s) = self.services.lock().ok()?.get(token) {
@@ -291,11 +337,13 @@ async fn start(State(c): State<Arc<Connect>>, Json(b): Json<StartBody>) -> Respo
         );
     }
     let (secret_key, public_key) = new_key();
+    let claim = hex::encode(rand::random::<[u8; 32]>());
     {
         let Ok(mut pending) = c.pending.lock() else {
             return refuse(StatusCode::INTERNAL_SERVER_ERROR, "busy");
         };
-        pending.retain(|_, p| p.at.elapsed() < PENDING_FOR);
+        // One waiting connection per account: a new start replaces the old.
+        pending.retain(|_, p| p.at.elapsed() < PENDING_FOR && p.account != b.account);
         if pending.len() >= MAX_PENDING {
             return refuse(
                 StatusCode::TOO_MANY_REQUESTS,
@@ -304,7 +352,12 @@ async fn start(State(c): State<Arc<Connect>>, Json(b): Json<StartBody>) -> Respo
         }
         pending.insert(
             public_key.clone(),
-            Pending { account: b.account.clone(), secret_key, at: Instant::now() },
+            Pending {
+                account: b.account.clone(),
+                secret_key,
+                claim_sha256: sha256(claim.as_bytes()),
+                at: Instant::now(),
+            },
         );
     }
     Json(json!({
@@ -316,28 +369,20 @@ async fn start(State(c): State<Arc<Connect>>, Json(b): Json<StartBody>) -> Respo
         "method_names": ALLOWED_METHODS,
         "allowance_yocto": ALLOWANCE_YOCTO.to_string(),
         "min_first_deposit_yocto": "50000000000000000000000",
+        "claim": claim,
     }))
     .into_response()
 }
 
 async fn finish(State(c): State<Arc<Connect>>, Json(b): Json<FinishBody>) -> Response {
-    let secret_key = {
-        let Ok(pending) = c.pending.lock() else {
-            return refuse(StatusCode::INTERNAL_SERVER_ERROR, "busy");
-        };
-        match pending.get(&b.public_key) {
-            Some(p) if p.account == b.account && p.at.elapsed() < PENDING_FOR => {
-                p.secret_key.clone()
-            }
-            _ => {
-                return refuse(
-                    StatusCode::NOT_FOUND,
-                    "no connection waiting for this account and key; start again",
-                )
-            }
-        }
+    let Some(p) = c.take_pending(&b.account, &b.public_key, &b.claim) else {
+        return refuse(
+            StatusCode::NOT_FOUND,
+            "no connection waiting for this account, key and claim; start again",
+        );
     };
     let Some(permission) = c.access_key(&b.account, &b.public_key).await else {
+        c.put_back(&b.public_key, p);
         return refuse(
             StatusCode::CONFLICT,
             "the key is not on the account yet; approve it in your wallet, then try again",
@@ -350,11 +395,15 @@ async fn finish(State(c): State<Arc<Connect>>, Json(b): Json<FinishBody>) -> Res
         );
     }
     let token = token();
-    let saved = Saved { account: b.account.clone(), secret_key, public_key: b.public_key.clone() };
+    let saved =
+        Saved { account: b.account.clone(), secret_key: p.secret_key, public_key: b.public_key.clone() };
     {
         let Ok(mut all) = c.saved.lock() else {
             return refuse(StatusCode::INTERNAL_SERVER_ERROR, "busy");
         };
+        if all.values().any(|s| s.public_key == b.public_key) {
+            return refuse(StatusCode::CONFLICT, "this key already has a connector");
+        }
         all.insert(token.clone(), saved);
         if let Err(e) = c.persist(&all) {
             all.remove(&token);
@@ -363,9 +412,6 @@ async fn finish(State(c): State<Arc<Connect>>, Json(b): Json<FinishBody>) -> Res
                 &format!("could not save the connector: {e}"),
             );
         }
-    }
-    if let Ok(mut pending) = c.pending.lock() {
-        pending.remove(&b.public_key);
     }
     Json(json!({
         "ok": true,
@@ -398,9 +444,15 @@ mod tests {
 
     #[test]
     fn only_a_key_limited_to_the_escrow_and_connector_methods_is_accepted() {
-        let ok = json!({ "FunctionCall": { "receiver_id": "escrow.sphinxescrow.near", "allowance": "1",
+        let ok = json!({ "FunctionCall": { "receiver_id": "escrow.sphinxescrow.near", "allowance": "250000000000000000000000",
                                            "method_names": ["submit_from_balance", "withdraw_balance"] } });
         assert!(permission_ok(&ok, "escrow.sphinxescrow.near"));
+        let unlimited = json!({ "FunctionCall": { "receiver_id": "escrow.sphinxescrow.near", "allowance": null,
+                                                  "method_names": ["submit_from_balance"] } });
+        assert!(!permission_ok(&unlimited, "escrow.sphinxescrow.near"));
+        let larger = json!({ "FunctionCall": { "receiver_id": "escrow.sphinxescrow.near", "allowance": "250000000000000000000001",
+                                               "method_names": ["submit_from_balance"] } });
+        assert!(!permission_ok(&larger, "escrow.sphinxescrow.near"));
         assert!(!permission_ok(&json!("FullAccess"), "escrow.sphinxescrow.near"));
         let other = json!({ "FunctionCall": { "receiver_id": "evil.near", "method_names": ["submit_from_balance"] } });
         assert!(!permission_ok(&other, "escrow.sphinxescrow.near"));
@@ -409,6 +461,37 @@ mod tests {
         let extra = json!({ "FunctionCall": { "receiver_id": "escrow.sphinxescrow.near",
                                               "method_names": ["submit_from_balance", "set_grader_key"] } });
         assert!(!permission_ok(&extra, "escrow.sphinxescrow.near"));
+    }
+
+    fn server() -> Connect {
+        let dir = std::env::temp_dir().join(format!("sphinx-connect-test-{}", token()));
+        Connect::new("escrow.sphinx999.testnet".parse().unwrap(), None, "https://x", vec![], &dir)
+            .unwrap()
+    }
+
+    fn wait(c: &Connect, account: &str, public_key: &str, claim: &str) {
+        c.pending.lock().unwrap().insert(
+            public_key.to_owned(),
+            Pending {
+                account: account.to_owned(),
+                secret_key: "s".to_owned(),
+                claim_sha256: sha256(claim.as_bytes()),
+                at: Instant::now(),
+            },
+        );
+    }
+
+    #[test]
+    fn a_connection_is_finished_only_with_its_claim_and_only_once() {
+        let c = server();
+        wait(&c, "kemi.testnet", "ed25519:K", "secret-claim");
+        // Someone watching the chain knows the account and the key, not the claim.
+        assert!(c.take_pending("kemi.testnet", "ed25519:K", "").is_none());
+        assert!(c.take_pending("kemi.testnet", "ed25519:K", "guess").is_none());
+        assert!(c.take_pending("other.testnet", "ed25519:K", "secret-claim").is_none());
+        // The owner's page finishes it, once; a racing second finish gets nothing.
+        assert!(c.take_pending("kemi.testnet", "ed25519:K", "secret-claim").is_some());
+        assert!(c.take_pending("kemi.testnet", "ed25519:K", "secret-claim").is_none());
     }
 
     #[test]

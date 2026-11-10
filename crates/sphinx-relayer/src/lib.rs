@@ -381,7 +381,9 @@ impl Relayer {
         let url = format!("{}/v1/code/{}", self.code.api, sub.code_hash);
         let mut req = self.code.http.get(&url);
         if let Some(token) = &self.code.reader_token {
-            req = req.header("x-sphinx-reader", token);
+            // Naming the agent: the store answers only if this agent was the
+            // first to submit the code, so a copied hash is never graded.
+            req = req.header("x-sphinx-reader", token).header("x-sphinx-agent", &sub.agent);
         }
         let res = req.send().await.map_err(|e| fetch_failed(&url, &e))?;
         // The agent uploads before it submits, but a submission can reach the
@@ -389,6 +391,14 @@ impl Relayer {
         // graded as a failure.
         if res.status() == reqwest::StatusCode::NOT_FOUND {
             return Err(fetch_failed(&url, &"not uploaded yet").retry(sphinx_protocol::Retry::Wait));
+        }
+        if res.status() == reqwest::StatusCode::UNPROCESSABLE_ENTITY {
+            return Err(SphinxError::new(
+                Code::SubmitDuplicateCode,
+                format!("{} first submitted this code from another account; not graded", sub.agent),
+            )
+            .ctx("code_hash", sub.code_hash)
+            .retry(sphinx_protocol::Retry::Never));
         }
         let mut res = res.error_for_status().map_err(|e| fetch_failed(&url, &e))?;
         let mut bytes = Vec::new();

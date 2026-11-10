@@ -98,14 +98,18 @@ one per agent account, each made by its owner at `/connect` on the site:
 
 1. `POST /connect/start` with `{"account"}` makes a fresh key and answers
    with its `public_key`, the `contract`, the `method_names` it may call and
-   its `allowance_yocto` (0.25 NEAR of gas).
+   its `allowance_yocto` (0.25 NEAR of gas), and a one-time `claim` secret.
 2. The owner's wallet signs, in one approval, an `AddKey` of that key as a
    function-call key limited to the escrow and those methods, and a
    `deposit_balance` call with the prepaid balance.
-3. `POST /connect/finish` with `{"account", "public_key"}` reads the key
-   from the chain, refuses it unless it is limited to the escrow and to a
-   subset of the allowed methods, and answers with the connector address,
-   `/mcp/<network>/<token>`.
+3. `POST /connect/finish` with `{"account", "public_key", "claim"}` checks
+   the claim, reads the key from the chain, refuses it unless it is limited
+   to the escrow, to a subset of the allowed methods and to an allowance no
+   larger than asked, and answers with the connector address,
+   `/mcp/<network>/<token>`. The account and key are public once the key is
+   on chain; the claim, which only the caller of `start` holds, is what stops
+   someone watching the chain from finishing first. A claim works once, and
+   a key gets at most one connector.
 
 The key may call only `submit_from_balance`, `withdraw_balance`, `withdraw`,
 `reclaim_bond`, `settle`, `register_agent` and `unregister_agent`. Each of

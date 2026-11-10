@@ -569,6 +569,8 @@ struct StoredCode {
 pub const CLIENT_HEADER: &str = "x-sphinx-client";
 /// Header that carries the code reader token (the relayer's).
 pub const READER_HEADER: &str = "x-sphinx-reader";
+/// Header the relayer sets to the agent whose submission it is grading.
+pub const AGENT_HEADER: &str = "x-sphinx-agent";
 
 async fn put_code<C: Chain>(
     State(s): State<Arc<AppState<C>>>,
@@ -598,10 +600,11 @@ async fn get_code<C: Chain>(
                 .ctx("code_hash", hash),
         )
     };
-    // Private by default. Task text a job points to is public. Submission
-    // code is readable by the relayer (reader token), by the agent that
-    // submitted it, and by the buyer once the job was paid to that
-    // submission. A job's hidden suite, if its buyer chooses to publish it,
+    // Private by default. What a hash is follows from where it first
+    // appeared on chain (see `Origin`). Task text, first named by a job, is
+    // public. Submission code is readable by the relayer (reader token, and
+    // only for the agent that first submitted it), by that agent, and by the
+    // buyer once a job was paid to that agent's submission. A job's hidden suite, if its buyer chooses to publish it,
     // is public after every job that committed it is finished; reference
     // solutions never are. Nothing else is served, so a buyer cannot read failed
     // near-solutions and nobody reads code before it is scored. The rules
@@ -610,7 +613,28 @@ async fn get_code<C: Chain>(
     // exception, a new job reusing an already public suite, gains nothing
     // from secrecy, and the posting tools refuse to reuse a public suite.
     let reader = s.code.is_reader(headers.get(READER_HEADER).and_then(|v| v.to_str().ok()));
-    if !reader && !may_read(&s, &headers, hash).await? {
+    if reader {
+        // The relayer names the agent it is about to grade: it gets the code
+        // only if that agent was the first to submit it, so a copied hash is
+        // never graded for the copier.
+        if let Some(agent) = headers.get(AGENT_HEADER).and_then(|v| v.to_str().ok()) {
+            let subs = all_submissions(&s).await?;
+            match origin(&s, hash, &subs).await? {
+                Origin::Code(author) if author == agent => {}
+                Origin::Unknown => return Err(missing()),
+                _ => {
+                    return Err(ApiError(
+                        SphinxError::new(
+                            Code::SubmitDuplicateCode,
+                            format!("{hash} was first submitted by another account; it is not graded for {agent}"),
+                        )
+                        .ctx("code_hash", hash)
+                        .ctx("agent", agent),
+                    ))
+                }
+            }
+        }
+    } else if !may_read(&s, &headers, hash).await? {
         return Err(missing());
     }
     let code = s.code.get(&hash).await?.ok_or_else(missing)?;
@@ -630,55 +654,106 @@ async fn may_read<C: Chain>(
 ) -> ApiResult<bool> {
     use sphinx_near::views::SubStatus;
     let subs = all_submissions(s).await?;
+    let origin = origin(s, hash, &subs).await?;
     // Bytes that parse as a suite are public only once revealed; anything
-    // else only as some job's task text.
-    let public = !is_secret(s, hash, &subs).await?
-        && if is_suite(s, hash).await? {
-            is_revealed(s, hash).await?
-        } else {
-            is_spec(s, hash).await?
-        };
+    // else only when it first appeared on chain as some job's task text.
+    let public = match origin {
+        Origin::Spec | Origin::Unknown => {
+            if is_suite(s, hash).await? {
+                is_revealed(s, hash).await?
+            } else {
+                origin == Origin::Spec
+            }
+        }
+        Origin::Code(_) | Origin::Ambiguous | Origin::Reference => false,
+    };
     if public {
         return Ok(true);
     }
+    // Submitted code: its author, and the buyer who paid for it.
+    let Origin::Code(author) = origin else { return Ok(false) };
     let Some(caller) = signed_caller(s, headers, &hash.to_string()).await? else {
         return Ok(false);
     };
-    Ok(subs.iter().any(|(job, sub)| {
-        sub.code_hash == hash
-            && (sub.agent == caller
-                || (job.buyer == caller
-                    && job.status == JobStatus::Paid
-                    && sub.status == SubStatus::Passed
-                    && job.winning_sub_id == Some(sub.sub_id)))
-    }))
+    Ok(caller == author
+        || subs.iter().any(|(job, sub)| {
+            sub.code_hash == hash
+                && sub.agent == author
+                && job.buyer == caller
+                && job.status == JobStatus::Paid
+                && sub.status == SubStatus::Passed
+                && job.winning_sub_id == Some(sub.sub_id)
+        }))
 }
 
-/// Whether `hash` is submitted code or a reference solution. Known
-/// submissions come from the scan; submissions to jobs still taking or
-/// grading work are read again past the cache, so code submitted moments ago
-/// is never mistaken for public text.
-async fn is_secret<C: Chain>(
+/// What stored bytes are, decided by where their hash first appeared on
+/// chain. Task text appears first as a job's `spec_uri`; code appears first in
+/// its author's submission. Anyone can name a hash later, as task text or as
+/// code, but nobody can name it earlier than it appeared: the hash of text
+/// stored privately is unknown until a transaction carries it. So copying a
+/// submitted hash into a job or another submission neither opens the code nor
+/// makes the copier its author, and submitting someone's task text as code
+/// does not hide it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Origin {
+    /// Nothing on chain names it.
+    Unknown,
+    /// First named as a job's task text.
+    Spec,
+    /// First submitted as code, by this account.
+    Code(String),
+    /// Named first, in the same block, in two different ways.
+    Ambiguous,
+    /// The reference solution of a job whose suite check passed.
+    Reference,
+}
+
+fn note(first: &mut Option<(u128, Origin)>, at: &str, origin: Origin) {
+    let at = at.parse::<u128>().unwrap_or(u128::MAX);
+    match first {
+        Some((t, o)) if at == *t => {
+            if *o != origin {
+                *o = Origin::Ambiguous;
+            }
+        }
+        Some((t, _)) if at > *t => {}
+        _ => *first = Some((at, origin)),
+    }
+}
+
+/// Where `hash` first appeared on chain (see [`Origin`]). Known submissions
+/// come from the scan; submissions to jobs still taking or grading work are
+/// read again past the cache, so code submitted moments ago is counted.
+async fn origin<C: Chain>(
     s: &AppState<C>,
     hash: Hash32,
     subs: &[(Job, Submission)],
-) -> ApiResult<bool> {
-    if subs.iter().any(|(_, sub)| sub.code_hash == hash) {
-        return Ok(true);
+) -> ApiResult<Origin> {
+    let mut first = None;
+    for (_, sub) in subs.iter().filter(|(_, sub)| sub.code_hash == hash) {
+        note(&mut first, &sub.submitted_at_ns, Origin::Code(sub.agent.clone()));
     }
+    let mut reference = false;
     let mut from = 0u64;
     loop {
         let page = s.chain.jobs(from, PAGE).await?;
         for job in &page {
-            if job.commit.as_ref().is_some_and(|c| c.ref_solution_hash == hash) {
-                return Ok(true);
+            if spec_hash(&job.spec_uri) == Some(hash) {
+                note(&mut first, &job.created_at_ns, Origin::Spec);
+            }
+            // A reference counts only once the enclave ran it: naming a hash
+            // as the reference of a job that never opened hides nothing.
+            if matches!(job.status, JobStatus::Open | JobStatus::Paid)
+                && job.commit.as_ref().is_some_and(|c| c.ref_solution_hash == hash)
+            {
+                reference = true;
             }
             if !is_finished(job) || job.pending_count > 0 {
                 let mut sub_from = 0u32;
                 loop {
                     let fresh = s.chain.fresh_submissions(job.id_u64(), sub_from, PAGE).await?;
-                    if fresh.iter().any(|sub| sub.code_hash == hash) {
-                        return Ok(true);
+                    for sub in fresh.iter().filter(|sub| sub.code_hash == hash) {
+                        note(&mut first, &sub.submitted_at_ns, Origin::Code(sub.agent.clone()));
                     }
                     if fresh.len() < PAGE as usize {
                         break;
@@ -688,10 +763,14 @@ async fn is_secret<C: Chain>(
             }
         }
         if page.len() < PAGE as usize {
-            return Ok(false);
+            break;
         }
         from += u64::from(PAGE);
     }
+    if reference {
+        return Ok(Origin::Reference);
+    }
+    Ok(first.map_or(Origin::Unknown, |(_, o)| o))
 }
 
 /// Whether the stored bytes under `hash` are a test suite.
@@ -738,21 +817,6 @@ fn spec_hash(spec_uri: &str) -> Option<Hash32> {
     spec_uri.rsplit_once("/v1/code/").and_then(|(_, h)| h.parse().ok())
 }
 
-/// Whether some job's task text is stored under `hash`, named exactly by its
-/// `spec_uri` (jobs without submissions are not in the submissions scan).
-async fn is_spec<C: Chain>(s: &AppState<C>, hash: Hash32) -> ApiResult<bool> {
-    let mut from = 0u64;
-    loop {
-        let page = s.chain.jobs(from, PAGE).await?;
-        if page.iter().any(|job| spec_hash(&job.spec_uri) == Some(hash)) {
-            return Ok(true);
-        }
-        if page.len() < PAGE as usize {
-            return Ok(false);
-        }
-        from += u64::from(PAGE);
-    }
-}
 
 /// The account a valid `x-sphinx-auth` header speaks for, if any: a NEP-413
 /// message asking for this hash, fresh, signed by one of the account's

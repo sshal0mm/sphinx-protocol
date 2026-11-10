@@ -189,27 +189,35 @@ async fn app() -> axum::Router {
                 committed(4, "Open", SUITE_LIVE, REFERENCE),
                 // An attacker's jobs naming other people's hashes: as task
                 // text (suffix and exact forms) and as a committed suite.
-                job(5, "Draft", &format!("x/{}", Hash32::digest(FAILED)), None, 0),
-                job(
-                    6,
-                    "Cancelled",
-                    &format!("https://evil.example/v1/code/{}", Hash32::digest(PASSED)),
-                    None,
-                    0,
+                at(job(5, "Draft", &format!("x/{}", Hash32::digest(FAILED)), None, 0), "created_at_ns", 1000),
+                at(
+                    job(
+                        6,
+                        "Cancelled",
+                        &format!("https://evil.example/v1/code/{}", Hash32::digest(PASSED)),
+                        None,
+                        0,
+                    ),
+                    "created_at_ns",
+                    1000,
                 ),
-                job(
-                    7,
-                    "Cancelled",
-                    &format!("https://evil.example/v1/code/{}", Hash32::digest(REFERENCE)),
-                    None,
-                    0,
+                at(
+                    job(
+                        7,
+                        "Cancelled",
+                        &format!("https://evil.example/v1/code/{}", Hash32::digest(REFERENCE)),
+                        None,
+                        0,
+                    ),
+                    "created_at_ns",
+                    1000,
                 ),
                 committed(8, "Cancelled", FAILED, LOOSE),
                 committed(9, "Cancelled", REFERENCE, LOOSE),
             ],
             subs: vec![
-                sub(0, 0, "agent-a.testnet", FAILED, "Failed"),
-                sub(0, 1, "agent-b.testnet", PASSED, "Passed"),
+                at(sub(0, 0, "agent-a.testnet", FAILED, "Failed"), "submitted_at_ns", 10),
+                at(sub(0, 1, "agent-b.testnet", PASSED, "Passed"), "submitted_at_ns", 10),
             ],
             keys,
         },
@@ -218,6 +226,14 @@ async fn app() -> axum::Router {
         relay: None,
         uids: sphinx_api::uids::UidIndex::default(),
     }))
+}
+
+/// A nonce no other request in this test run used: signed reads work once.
+fn fresh_nonce() -> [u8; 32] {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    let mut n = [0u8; 32];
+    n[..8].copy_from_slice(&NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed).to_le_bytes());
+    n
 }
 
 fn now_ms() -> u64 {
@@ -238,7 +254,7 @@ async fn read(
             account,
             &key(secret),
             &nep413::code_message(&hash, now_ms()),
-            [9; 32],
+            fresh_nonce(),
         );
         req = req.header(nep413::HEADER, header);
     }
@@ -334,4 +350,82 @@ async fn naming_someone_elses_hash_in_a_job_does_not_open_it() {
     }
     // Task text named exactly is still public.
     assert_eq!(read(app().await, SPEC, None, None).await, StatusCode::OK);
+}
+
+// Where a hash first appeared on chain decides what it is.
+
+const SPEC_A: &[u8] = b"Write add(a, b) returning a + b.";
+const SPEC_B: &[u8] = b"Write mul(a, b) returning a * b.";
+const ORIGINAL: &[u8] = b"function add(a, b){ return a + b } // agent-a's own work, 7f3c";
+
+fn at<T: serde::Serialize + serde::de::DeserializeOwned>(v: T, field: &str, ns: u64) -> T {
+    let mut j = serde_json::to_value(v).unwrap();
+    j[field] = json!(ns.to_string());
+    serde_json::from_value(j).unwrap()
+}
+
+/// Job 0 (task `SPEC_A`, posted at 100) gets agent-a's `ORIGINAL` at 200. Job 1
+/// (posted at 300) gets agent-b's copies: `SPEC_A` submitted as code at 400 and
+/// `ORIGINAL`'s hash at 500. Job 2 commits `SPEC_A`'s hash as its reference and is
+/// cancelled.
+async fn copied_app() -> axum::Router {
+    let dir = std::env::temp_dir().join(format!("sphinx-origin-{}", std::process::id()));
+    let code = CodeStore::new(dir).with_reader_token(Some("relayer-token-0123456789".into()));
+    for bytes in [SPEC_A, SPEC_B, ORIGINAL] {
+        code.put(bytes, "setup").await.unwrap();
+    }
+    let uri = |b: &[u8]| format!("https://api.example/v1/code/{}", Hash32::digest(b));
+    let keys = [("agent-a.testnet", AGENT_KEY), ("agent-b.testnet", STRANGER_KEY)]
+        .map(|(a, k)| (a.to_owned(), key(k).public_key().to_string()))
+        .to_vec();
+    router(Arc::new(AppState {
+        chain: FakeChain {
+            jobs: vec![
+                at(job(0, "Open", &uri(SPEC_A), None, 1), "created_at_ns", 100),
+                at(job(1, "Open", &uri(SPEC_B), None, 2), "created_at_ns", 300),
+                committed(2, "Cancelled", SUITE_NONE, SPEC_A),
+            ],
+            subs: vec![
+                at(sub(0, 0, "agent-a.testnet", ORIGINAL, "Failed"), "submitted_at_ns", 200),
+                at(sub(1, 0, "agent-b.testnet", SPEC_A, "Failed"), "submitted_at_ns", 400),
+                at(sub(1, 1, "agent-b.testnet", ORIGINAL, "Pending"), "submitted_at_ns", 500),
+            ],
+            keys,
+        },
+        code,
+        public_base: "https://api.example".into(),
+        relay: None,
+        uids: sphinx_api::uids::UidIndex::default(),
+    }))
+}
+
+#[tokio::test]
+async fn task_text_cannot_be_hidden_by_submitting_it_or_naming_it_as_a_reference() {
+    assert_eq!(read(copied_app().await, SPEC_A, None, None).await, StatusCode::OK);
+    assert_eq!(read(copied_app().await, SPEC_B, None, None).await, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn submitting_someone_elses_hash_does_not_make_you_its_reader() {
+    let copier = Some(("agent-b.testnet", STRANGER_KEY));
+    let author = Some(("agent-a.testnet", AGENT_KEY));
+    assert_eq!(read(copied_app().await, ORIGINAL, copier, None).await, StatusCode::NOT_FOUND);
+    assert_eq!(read(copied_app().await, ORIGINAL, author, None).await, StatusCode::OK);
+    assert_eq!(read(copied_app().await, ORIGINAL, None, None).await, StatusCode::NOT_FOUND);
+}
+
+async fn relayer_reads(bytes: &[u8], agent: &str) -> StatusCode {
+    let req = Request::builder()
+        .uri(format!("/v1/code/{}", Hash32::digest(bytes)))
+        .header(READER_HEADER, "relayer-token-0123456789")
+        .header(sphinx_api::AGENT_HEADER, agent)
+        .body(Body::empty())
+        .unwrap();
+    copied_app().await.oneshot(req).await.unwrap().status()
+}
+
+#[tokio::test]
+async fn the_relayer_gets_code_only_for_the_agent_that_first_submitted_it() {
+    assert_eq!(relayer_reads(ORIGINAL, "agent-a.testnet").await, StatusCode::OK);
+    assert_eq!(relayer_reads(ORIGINAL, "agent-b.testnet").await, StatusCode::UNPROCESSABLE_ENTITY);
 }
