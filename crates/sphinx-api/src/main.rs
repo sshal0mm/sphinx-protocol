@@ -131,8 +131,10 @@ async fn main() -> std::process::ExitCode {
 
 /// Reads the optional relayer account and key.
 fn relay_from_env(escrow: &Escrow) -> Result<Option<Relay>, String> {
-    let (Ok(account), Ok(key)) =
-        (std::env::var("SPHINX_RELAYER_ACCOUNT"), std::env::var("SPHINX_RELAYER_KEY"))
+    // Unset or empty (as compose passes an unset variable): no relay, and the
+    // API runs read-only for relayed calls.
+    let set = |name: &str| std::env::var(name).ok().filter(|v| !v.trim().is_empty());
+    let (Some(account), Some(key)) = (set("SPHINX_RELAYER_ACCOUNT"), set("SPHINX_RELAYER_KEY"))
     else {
         return Ok(None);
     };
