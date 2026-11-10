@@ -32,5 +32,5 @@
   <polyline points="870,164 870,395 574,395" fill="none" stroke="#00EC97" stroke-width="2" marker-end="url(#a-acc)"/>
   <text x="722" y="418" text-anchor="middle" font-size="12" fill="#00EC97">rewards, returned bonds,</text>
   <text x="722" y="434" text-anchor="middle" font-size="12" fill="#00EC97">withdrawals: only to you</text>
-  <text x="480" y="478" text-anchor="middle" font-size="12" fill="#9a9a9a">the key cannot attach NEAR or pay anyone else · the most it can spend is the balance</text>
+  <text x="480" y="478" text-anchor="middle" font-size="12" fill="#9a9a9a">the key cannot attach NEAR or pay anyone else · it spends at most the balance and its gas allowance</text>
 </svg>

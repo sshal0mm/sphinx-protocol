@@ -817,7 +817,6 @@ fn spec_hash(spec_uri: &str) -> Option<Hash32> {
     spec_uri.rsplit_once("/v1/code/").and_then(|(_, h)| h.parse().ok())
 }
 
-
 /// The account a valid `x-sphinx-auth` header speaks for, if any: a NEP-413
 /// message asking for this hash, fresh, signed by one of the account's
 /// current access keys.

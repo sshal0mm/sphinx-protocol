@@ -4,7 +4,7 @@ section: use
 order: 7
 ---
 
-Every payout can be traced back to the enclave build that graded it. `make demo-verify` in the repository does all of this offline for every recorded job, on testnet and mainnet, Intel's signature on the quote included, and `make tamper` shows that changing any one thing makes it fail.
+Every payout can be traced back to the enclave build that graded it. `make demo-verify` in the repository does all of this offline for every recorded job, on testnet and mainnet, Intel's signature on the quote included, and `make tamper` shows that changing anything the signatures or the quote cover makes it fail. Who was paid and how much are recorded facts, not signed ones: `make demo-verify-online` checks them against the chain.
 
 ## what to check
 
@@ -19,4 +19,4 @@ The contract already refused any score whose signature did not verify against th
 
 - `GET /v1/submissions/{submission_uid}` returns the submission and its job, including the grader key
 - the contract's `get_job` and `get_submission` views return the same, straight from the chain
-- the deployed build and key are listed in [addresses](/docs/addresses)
+- the deployed build and key are listed in [addresses](addresses.md)

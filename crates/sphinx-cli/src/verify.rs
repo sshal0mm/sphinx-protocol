@@ -613,7 +613,9 @@ fn check_payout(r: &mut Report, bundle: &Value, job: &Value, passes: &[u64]) {
             .map_or("", |x| s(x, &["agent"]));
         r.push(
             winner.is_some() && winner == first_pass && s(job, &["winner"]) == agent,
-            format!("the job was paid to the earliest signed pass ({agent})"),
+            format!(
+                "the recorded payout went to the earliest signed pass ({agent}); the account and amount are recorded, not signed (`--online` re-reads them from chain)"
+            ),
         );
     } else {
         r.skip(format!("payout (job is {})", s(job, &["status"])));

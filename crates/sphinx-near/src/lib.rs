@@ -49,11 +49,8 @@ pub const TESTNET_RPC: &[&str] = &[
 ];
 
 /// Public NEAR mainnet RPC endpoints, tried in order.
-pub const MAINNET_RPC: &[&str] = &[
-    "https://rpc.mainnet.fastnear.com",
-    "https://free.rpc.fastnear.com",
-    "https://rpc.mainnet.near.org",
-];
+pub const MAINNET_RPC: &[&str] =
+    &["https://rpc.mainnet.fastnear.com", "https://free.rpc.fastnear.com", "https://near.drpc.org"];
 
 /// The gas to attach to an escrow call. NEAR makes the sender hold all of it
 /// at a pessimistic price before sending (on mainnet about 0.001 NEAR per

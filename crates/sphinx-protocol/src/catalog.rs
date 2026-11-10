@@ -334,7 +334,7 @@ pub fn render_error_docs() -> String {
          | `transient` | retry as-is with backoff |\n\n\
          | bond_effect | meaning |\n|---|---|\n\
          | `none` | no bond was taken (a failed call refunds its deposit) |\n\
-         | `forfeited` | the attempt failed: the job holds the bond, burned if another submission passes, back to you if the job is refunded or cancelled |\n\
+         | `forfeited` | the attempt failed: the job holds the bond, kept by the contract if another submission passes, back to you if the job is refunded or cancelled |\n\
          | `returned` | the bond was paid back |\n\
          | `held` | the contract still holds the bond; it can be recovered |\n",
     );

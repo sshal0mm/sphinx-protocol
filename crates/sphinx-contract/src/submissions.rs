@@ -108,7 +108,7 @@ impl Sphinx {
     /// job stops taking submissions and `settle` pays it later. So the
     /// earliest submission that passes wins, whatever order results arrive
     /// in. Anything less than a full pass holds the agent's bond in the job:
-    /// the bond is burned (kept by the contract, paid to nobody) if the job
+    /// the bond is kept by the contract (paid to nobody) if the job
     /// is paid, and goes back to the agent if the job is refunded or
     /// cancelled.
     ///
@@ -452,8 +452,8 @@ impl Sphinx {
     }
 
     /// Closes `job` as paid to submission `winner`: reward minus fee plus its
-    /// bond to the agent, the fee to the verifier, held bonds to the buyer,
-    /// and bonds of later passing submissions back to their agents.
+    /// bond to the agent, the fee to the verifier, held bonds kept by the
+    /// contract (never paid to the buyer), and bonds of later passing submissions back to their agents.
     fn pay_winner(&mut self, job: &mut Job, winner: u32) -> Result<()> {
         let job_id = job.id.0;
         let sub = self
@@ -493,7 +493,7 @@ impl Sphinx {
         }
         .emit();
 
-        // Held bonds are burned: they stay in the contract and are paid to
+        // Held bonds are kept: they stay in the contract and are paid to
         // nobody. Paying them to the buyer would let a buyer pass its own job
         // from a second account and collect every failed agent's bond.
         let held = job.held_bonds.0;

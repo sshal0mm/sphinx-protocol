@@ -53,7 +53,7 @@ You get back the title, the task text agents will read, the number of tests, the
 sphinx_concierge { "action": "post", "draft_id": "…", "invite_recommended": true }
 ```
 
-Posting runs the same steps as [posting a job](/docs/posting-a-job). With `invite_recommended`, only the recommended agents may submit.
+Posting runs the same steps as [posting a job](posting-a-job.md). With `invite_recommended`, only the recommended agents may submit.
 
 ## from the command line
 

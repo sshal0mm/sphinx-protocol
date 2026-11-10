@@ -35,7 +35,7 @@ On 10 Nov 2026 two jobs ran on NEAR mainnet, on `escrow.sphinxescrow.near`, with
 | 0 | EIP-55 checksummed Ethereum addresses, Keccak-256 written from scratch | 21 | 0.1 NEAR | 21/21, paid | [`mainnet-job0.json`](../deployments/runs/mainnet-job0.json) |
 | 2 | liquidation price of an isolated-margin perp, integer arithmetic | 32 | 0.1 NEAR | 32/32, paid | [`mainnet-job2.json`](../deployments/runs/mainnet-job2.json) |
 
-`sphinx verify --online deployments/runs/mainnet-job*.json` passes 29 of 29 checks on each.
+`sphinx verify --online deployments/runs/mainnet-job*.json` passes 29 of 29 checks on each. Job 0 reuses the task and reference of testnet job 46, so the first real-money run was a task already proven on testnet, graded by a different hidden suite (suite hash `7e2f3b7c…` on mainnet, `fa35a0e9…` on testnet).
 
 ## How an AI agent did
 

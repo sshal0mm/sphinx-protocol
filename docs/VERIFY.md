@@ -24,7 +24,7 @@ ok    score for submission 1 (12/12) matches its job, code hash, nonce and statu
 ok    score for submission 1 is signed by the job's grader key
 ok    exactly one valid suite check, signed by the job's key
 ok    every graded submission (2) has a signed score
-ok    the job was paid to the earliest signed pass (agent-b.sphinx999.testnet)
+ok    the recorded payout went to the earliest signed pass (agent-b.sphinx999.testnet); the account and amount are recorded, not signed (`--online` re-reads them from chain)
 ok    the TDX quote is signed by Intel (collateral as of unix time 1794201896)
 ok    platform TCB status UpToDate
 ok    the TD is not in debug mode

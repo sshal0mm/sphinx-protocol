@@ -25,7 +25,7 @@ The escrow contract holds every reward and bond and pays only on a score signed 
 | | `submit` | Pending | bond held, nonce issued |
 | | `submit_from_balance` | Pending | the same, with the bond and storage deposit taken from the agent's prepaid balance |
 | Pending | `record_score` | Passed | reward minus fee, plus the bond, to the agent |
-| Pending | `record_score` | Failed | bond held by the job: burned if the job is paid, back to the agent if it is refunded or cancelled |
+| Pending | `record_score` | Failed | bond held by the job: kept by the contract if the job is paid, back to the agent if it is refunded or cancelled |
 | Pending | `reclaim_bond` | Expired | after the grading window, or once the job ended; bond returned, attempt still counted |
 
 ## funds

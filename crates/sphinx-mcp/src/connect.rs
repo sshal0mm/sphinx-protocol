@@ -102,6 +102,7 @@ pub struct Connect {
     rpc: String,
     http: reqwest::Client,
     pending: Mutex<HashMap<String, Pending>>,
+    starts: Mutex<HashMap<String, (Instant, u32)>>,
     saved: Mutex<HashMap<String, Saved>>,
     services: Mutex<HashMap<String, Service>>,
 }
@@ -119,6 +120,11 @@ impl std::fmt::Debug for Connect {
 struct StartBody {
     account: String,
 }
+
+/// Header the site's proxy sets to the visitor's address.
+const CLIENT_HEADER: &str = "x-sphinx-client";
+/// Sign-ups one visitor may start in an hour.
+const STARTS_PER_CLIENT: u32 = 10;
 
 #[derive(Deserialize)]
 struct FinishBody {
@@ -207,6 +213,7 @@ impl Connect {
             rpc,
             http: reqwest::Client::new(),
             pending: Mutex::new(HashMap::new()),
+            starts: Mutex::new(HashMap::new()),
             saved: Mutex::new(saved),
             services: Mutex::new(HashMap::new()),
         })
@@ -233,16 +240,34 @@ impl Connect {
         std::fs::rename(&tmp, &self.file).map_err(|e| e.to_string())
     }
 
-    /// The key's permission on chain, or `None` if the account has no such key.
-    async fn access_key(&self, account: &str, public_key: &str) -> Option<Value> {
+    /// The key's permission on chain, `Ok(None)` if the account has no such
+    /// key, or `Err` if the RPC could not say.
+    async fn access_key(&self, account: &str, public_key: &str) -> Result<Option<Value>, String> {
         let body = json!({
             "jsonrpc": "2.0", "id": 1, "method": "query",
             "params": { "request_type": "view_access_key", "finality": "final",
                         "account_id": account, "public_key": public_key }
         });
-        let v: Value =
-            self.http.post(&self.rpc).json(&body).send().await.ok()?.json().await.ok()?;
-        v.get("result").map(|r| r["permission"].clone())
+        let v: Value = self
+            .http
+            .post(&self.rpc)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?
+            .json()
+            .await
+            .map_err(|e| e.to_string())?;
+        if let Some(r) = v.get("result") {
+            return Ok(Some(r["permission"].clone()));
+        }
+        // NEAR answers an unknown key or account with an error naming it.
+        let text = v["error"].to_string();
+        if text.contains("UNKNOWN_ACCESS_KEY") || text.contains("UNKNOWN_ACCOUNT") {
+            Ok(None)
+        } else {
+            Err(format!("the NEAR RPC did not answer: {}", v["error"]))
+        }
     }
 
     /// Whether the contract has prepaid balances (`get_agent_balance`
@@ -266,6 +291,15 @@ impl Connect {
         v["result"]["result"].is_array()
     }
 
+    /// Counts a start by `client`; false once it has started too many this hour.
+    fn admit(&self, client: &str) -> bool {
+        let Ok(mut starts) = self.starts.lock() else { return false };
+        starts.retain(|_, (at, _)| at.elapsed() < Duration::from_secs(3600));
+        let entry = starts.entry(client.to_owned()).or_insert((Instant::now(), 0));
+        entry.1 += 1;
+        entry.1 <= STARTS_PER_CLIENT
+    }
+
     /// Takes the waiting connection for `public_key` if `account` and `claim`
     /// match, removing it under the same lock, so a claim works once even
     /// when two requests race.
@@ -273,7 +307,8 @@ impl Connect {
         let digest = sha256(claim.as_bytes());
         let mut pending = self.pending.lock().ok()?;
         let p = pending.get(public_key)?;
-        if p.account != account || p.at.elapsed() >= PENDING_FOR || !same(&p.claim_sha256, &digest) {
+        if p.account != account || p.at.elapsed() >= PENDING_FOR || !same(&p.claim_sha256, &digest)
+        {
             return None;
         }
         pending.remove(public_key)
@@ -326,7 +361,18 @@ impl Connect {
     }
 }
 
-async fn start(State(c): State<Arc<Connect>>, Json(b): Json<StartBody>) -> Response {
+async fn start(
+    State(c): State<Arc<Connect>>,
+    headers: axum::http::HeaderMap,
+    Json(b): Json<StartBody>,
+) -> Response {
+    let client = headers.get(CLIENT_HEADER).and_then(|v| v.to_str().ok()).unwrap_or("direct");
+    if !c.admit(client) {
+        return refuse(
+            StatusCode::TOO_MANY_REQUESTS,
+            "too many sign-ups started from here; try again in an hour",
+        );
+    }
     if b.account.parse::<AccountId>().is_err() {
         return refuse(StatusCode::UNPROCESSABLE_ENTITY, "not a NEAR account id");
     }
@@ -381,12 +427,19 @@ async fn finish(State(c): State<Arc<Connect>>, Json(b): Json<FinishBody>) -> Res
             "no connection waiting for this account, key and claim; start again",
         );
     };
-    let Some(permission) = c.access_key(&b.account, &b.public_key).await else {
-        c.put_back(&b.public_key, p);
-        return refuse(
-            StatusCode::CONFLICT,
-            "the key is not on the account yet; approve it in your wallet, then try again",
-        );
+    let permission = match c.access_key(&b.account, &b.public_key).await {
+        Ok(Some(permission)) => permission,
+        Err(e) => {
+            c.put_back(&b.public_key, p);
+            return refuse(StatusCode::BAD_GATEWAY, &format!("{e}; try again in a moment"));
+        }
+        Ok(None) => {
+            c.put_back(&b.public_key, p);
+            return refuse(
+                StatusCode::CONFLICT,
+                "the key is not on the account yet; approve it in your wallet, then try again",
+            );
+        }
     };
     if !permission_ok(&permission, c.contract.as_str()) {
         return refuse(
@@ -395,8 +448,11 @@ async fn finish(State(c): State<Arc<Connect>>, Json(b): Json<FinishBody>) -> Res
         );
     }
     let token = token();
-    let saved =
-        Saved { account: b.account.clone(), secret_key: p.secret_key, public_key: b.public_key.clone() };
+    let saved = Saved {
+        account: b.account.clone(),
+        secret_key: p.secret_key,
+        public_key: b.public_key.clone(),
+    };
     {
         let Ok(mut all) = c.saved.lock() else {
             return refuse(StatusCode::INTERNAL_SERVER_ERROR, "busy");

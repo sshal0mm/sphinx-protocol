@@ -20,8 +20,11 @@ use std::time::Duration;
 /// agent's bond then becomes reclaimable after the grading window.
 const MAX_ATTEMPTS: u32 = 3;
 /// Transient failures (RPC hiccups, a nonce race, a busy enclave) tolerated
-/// per unit of work before it is given up; they do not use up attempts.
+/// per unit of work before it is set aside; they do not use up attempts.
 const MAX_TRANSIENT: u32 = 10;
+/// How long work set aside after transient failures waits before it is
+/// tried again, so an outage does not drop it until the process restarts.
+const TRANSIENT_COOL_OFF: Duration = Duration::from_mins(30);
 /// Longest one unit of work may take; a slower one is abandoned for this
 /// pass so it cannot hold up every other job.
 const WORK_TIMEOUT: Duration = Duration::from_mins(10);
@@ -94,6 +97,7 @@ async fn main() -> std::process::ExitCode {
     );
     let mut attempts: HashMap<(u64, Option<u32>), u32> = HashMap::new();
     let mut transient: HashMap<(u64, Option<u32>), u32> = HashMap::new();
+    let mut set_aside: HashMap<(u64, Option<u32>), std::time::Instant> = HashMap::new();
     // Work waiting on someone else (a buyer who has not stored the suite yet); logged once.
     let mut waiting: HashSet<(u64, Option<u32>)> = HashSet::new();
     eprintln!("sphinx-relayer: {} for {}", relayer.account, relayer.escrow.contract_id());
@@ -113,9 +117,18 @@ async fn main() -> std::process::ExitCode {
             Ok(work) => {
                 failed_reads = 0;
                 for w in work {
+                    if set_aside.get(&w.key()).is_some_and(|at| at.elapsed() >= TRANSIENT_COOL_OFF)
+                    {
+                        set_aside.remove(&w.key());
+                        transient.remove(&w.key());
+                    }
                     let tries = attempts.entry(w.key()).or_insert(0);
                     let hiccups = transient.entry(w.key()).or_insert(0);
-                    if *tries >= MAX_ATTEMPTS || *hiccups >= MAX_TRANSIENT {
+                    if *tries >= MAX_ATTEMPTS {
+                        continue;
+                    }
+                    if *hiccups >= MAX_TRANSIENT {
+                        set_aside.entry(w.key()).or_insert_with(std::time::Instant::now);
                         continue;
                     }
                     *tries += 1;

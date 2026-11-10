@@ -79,7 +79,7 @@ attacks: ## Run real attacks against the testnet escrow and job API; records the
 attacks-check: ## Re-check the recorded attacks from the network, no keys
 	scripts/attacks-check.sh
 
-tamper: ## Show that changing one byte of a recorded job makes verification fail
+tamper: ## Show that changing a fact the signatures or the quote cover makes verification fail (who was paid and how much: verify --online)
 	cargo test -p sphinx-cli --bin sphinx verify::tests -- --nocapture 2>&1 | grep -E "^test |test result"
 
 record-run: ## Save a job's evidence bundle for offline checks: make record-run JOB=1

@@ -4,7 +4,7 @@ section: network
 order: 3
 ---
 
-The relayer starts enclave runs and posts their signed results. It is a messenger: it cannot change or forge a score.
+The relayer starts enclave runs and posts their signed results. It cannot change or forge a score, but it is the only account that can start a grading run, because the grader's keys are bound to it, so it decides which submissions are graded and when.
 
 ## what it does
 
@@ -22,4 +22,4 @@ The relayer reads submitted code only from the Sphinx code store, by the hash co
 
 ## if it stops
 
-Posting results is open to anyone holding a signed result, so several relayers can run at once. If none runs, no funds are stuck: pending bonds are reclaimable after the grading window, and rewards are refundable after the deadline and the grading window.
+Anyone holding a signed result may post it, but only the relayer's account can produce one. If none runs, no funds are stuck: pending bonds are reclaimable after the grading window, and rewards are refundable after the deadline and the grading window.

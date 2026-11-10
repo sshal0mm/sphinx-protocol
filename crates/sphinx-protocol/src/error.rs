@@ -48,7 +48,7 @@ impl Retry {
 pub enum BondEffect {
     /// No bond was taken (failed calls refund their attached deposit).
     None,
-    /// The bond is held by the job: burned if another submission passes,
+    /// The bond is held by the job: kept by the contract if another submission passes,
     /// returned if nobody passes.
     Forfeited,
     /// The bond was paid back.

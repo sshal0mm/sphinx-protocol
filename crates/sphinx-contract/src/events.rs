@@ -62,8 +62,9 @@ pub enum SphinxEvent {
     /// A full pass that waits for earlier submissions to finish before `settle` pays it.
     #[event_version("1.0.0")]
     PassRecorded { job_id: U64, sub_id: u32, agent: AccountId, passed: u32, total: u32 },
-    /// Held bonds leaving the job: burned when it is paid (kept by the
-    /// contract, paid to nobody, so a buyer gains nothing from failures), or
+    /// Held bonds leaving the job: `burned` is what the contract keeps when
+    /// the job is paid (paid to nobody, so a buyer gains nothing from
+    /// failures), or
     /// back to their agents (as unclaimed balances) when it is refunded or
     /// closed without a pass.
     #[event_version("2.0.0")]

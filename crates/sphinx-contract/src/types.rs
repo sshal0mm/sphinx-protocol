@@ -50,10 +50,11 @@ impl JobStatus {
 pub enum SubStatus {
     Pending,
     Passed,
-    /// Graded below full marks. The bond is held by the job: it goes to the
-    /// buyer if the job is paid, and back to the agent if it is refunded.
+    /// Graded below full marks. The bond is held by the job: kept by the
+    /// contract if the job is paid, back to the agent if it is refunded or
+    /// cancelled. Never paid to the buyer.
     Failed,
-    /// Never graded; the bond was returned and no attempt was consumed.
+    /// Never graded; the bond was returned, and the attempt still counts.
     Expired,
 }
 
@@ -136,8 +137,8 @@ pub struct Job {
     /// submissions are still waiting for a result. `settle` pays it once
     /// every earlier submission has finished.
     pub first_pass: Option<u32>,
-    /// Bonds of failed submissions. Held by the job: they go to the buyer
-    /// only if the job is paid, and back to their agents if it is refunded.
+    /// Bonds of failed submissions. Held by the job: kept by the contract if
+    /// the job is paid, back to their agents if it is refunded or cancelled.
     pub held_bonds: U128,
 }
 

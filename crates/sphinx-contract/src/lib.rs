@@ -6,8 +6,9 @@
 //! signs a result with an ed25519 key bound to the grader build. The contract
 //! accepts a result only if every field matches its own state and the
 //! signature verifies against the grader key snapshotted when the suite was
-//! committed. A full pass releases the reward; anything less forfeits the
-//! agent's bond to the buyer.
+//! committed. A full pass releases the reward; anything less holds the
+//! agent's bond in the job: kept by the contract if another submission
+//! passes, back to the agent if nobody does. It is never paid to the buyer.
 //!
 //! Posting a signed result is permissionless: the signature, not the caller,
 //! is the authority. See `docs/ARCHITECTURE.md` and `docs/THREAT_MODEL.md`.

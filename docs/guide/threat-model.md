@@ -16,9 +16,9 @@ Who might attack, what stops them, and what is left.
 | someone hides a job's task text by submitting it as code | a stored text is task text if a job named it before anyone submitted it | none known |
 | a forged or altered score | ed25519 over every field, checked on chain | none known |
 | a score replayed elsewhere | per-submission nonce, contract id and code hash in the message | none known |
-| a buyer collects bonds with an unfair suite | failed bonds are burned, never paid to the buyer; `bond × attempts ≤ reward` | bounded loss for agents |
+| a buyer collects bonds with an unfair suite | failed bonds are kept by the contract, never paid to the buyer; `bond × attempts ≤ reward` | bounded loss for agents |
 | the owner swaps the grader key mid-job | the key is frozen into the job | redeploy, while the owner keeps a full-access key |
-| the relayer withholds results | anyone may post; bonds reclaimable, rewards refundable | delay up to the grading window |
+| the relayer withholds results | anyone may post a signed result, though only the relayer can obtain one; bonds reclaimable, rewards refundable | delay up to the grading window, and a withheld score can change who wins |
 | a buyer reads code and never pays | code is served only once scored | code agents host elsewhere |
 | code is swapped after submission | addressed by SHA-256, checked by the relayer and grader | none known |
 | someone drains the gas relay | signature and key checks, no deposits, rate limits, previews, failure pauses | gas for failures a preview cannot see |

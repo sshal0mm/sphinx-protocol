@@ -35,6 +35,11 @@ pub struct Relayer {
     pub code: CodeSource,
 }
 
+/// Least the grader's caller must hold to start an enclave run: 0.1 NEAR of
+/// prepaid gas held at the pessimistic price, OutLayer's fee and its own
+/// storage, with a little room.
+pub const MIN_RUN_BALANCE: u128 = 115_000_000_000_000_000_000_000;
+
 /// Largest submission the relayer reads; the grader refuses anything larger.
 pub const MAX_CODE_BYTES: usize = 64 * 1024;
 
@@ -159,12 +164,46 @@ impl Relayer {
     /// # Errors
     /// The grader's or contract's catalog error.
     pub async fn perform(&self, work: &Work) -> Result<Outcome, SphinxError> {
+        if matches!(work, Work::CheckSuite { .. } | Work::Score { .. }) {
+            self.ensure_run_funds().await?;
+        }
         match *work {
             Work::CheckSuite { job_id } => self.check_suite(job_id).await,
             Work::Score { job_id, sub_id } => self.score(job_id, sub_id).await,
             Work::ReturnBond { job_id, sub_id } => self.return_bond(job_id, sub_id).await,
             Work::Settle { job_id } => self.settle(job_id).await,
         }
+    }
+
+    /// Refuses, as a wait, to start an enclave run the account cannot pay
+    /// for: NEAR makes the sender hold the run's 100 Tgas at a pessimistic
+    /// price (0.1 NEAR on mainnet) on top of OutLayer's fee. Waiting costs
+    /// nothing and does not use up the submission's attempts, so grading
+    /// resumes by itself once the account is topped up.
+    async fn ensure_run_funds(&self) -> Result<(), SphinxError> {
+        let balance = sphinx_near::near_api::Tokens::account(self.account.clone())
+            .near_balance()
+            .fetch_from(self.escrow.network())
+            .await
+            .map_err(|e| {
+                SphinxError::new(Code::RelayRpcFailed, format!("view_account failed: {e}"))
+            })?
+            .total
+            .as_yoctonear();
+        if balance < MIN_RUN_BALANCE {
+            return Err(SphinxError::new(
+                Code::RelayRpcFailed,
+                format!(
+                    "{} holds {} NEAR; an enclave run needs at least {} NEAR on hand, so grading waits for a top-up",
+                    self.account,
+                    sphinx_near::format_near(balance),
+                    sphinx_near::format_near(MIN_RUN_BALANCE)
+                ),
+            )
+            .ctx("balance_yocto", balance)
+            .retry(sphinx_protocol::Retry::Wait));
+        }
+        Ok(())
     }
 
     /// Pays a passing submission that was waiting for earlier ones.

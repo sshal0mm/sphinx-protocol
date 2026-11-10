@@ -18,7 +18,7 @@ Every Sphinx error carries a stable `code`, a one-line `message` with the actual
 | bond_effect | meaning |
 |---|---|
 | `none` | no bond was taken (a failed call refunds its deposit) |
-| `forfeited` | the attempt failed: the job holds the bond, burned if another submission passes, back to you if the job is refunded or cancelled |
+| `forfeited` | the attempt failed: the job holds the bond, kept by the contract if another submission passes, back to you if the job is refunded or cancelled |
 | `returned` | the bond was paid back |
 | `held` | the contract still holds the bond; it can be recovered |
 

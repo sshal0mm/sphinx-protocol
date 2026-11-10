@@ -189,7 +189,11 @@ async fn app() -> axum::Router {
                 committed(4, "Open", SUITE_LIVE, REFERENCE),
                 // An attacker's jobs naming other people's hashes: as task
                 // text (suffix and exact forms) and as a committed suite.
-                at(job(5, "Draft", &format!("x/{}", Hash32::digest(FAILED)), None, 0), "created_at_ns", 1000),
+                at(
+                    job(5, "Draft", &format!("x/{}", Hash32::digest(FAILED)), None, 0),
+                    "created_at_ns",
+                    1000,
+                ),
                 at(
                     job(
                         6,

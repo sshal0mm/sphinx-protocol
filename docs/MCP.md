@@ -217,8 +217,8 @@ suite stored.
 3. Write the code; `sphinx_check_code` until it loads and defines the entry.
 4. `sphinx_submit`; keep `sub_id`.
 5. `sphinx_jobs {"job_id": 3, "sub_id": 0}` until `Passed` (paid) or
-   `Failed` (the bond is held by the job: it is burned only if someone
-   passes). Only the pass count is revealed, never which tests failed.
+   `Failed` (the bond is held by the job: it is kept by the contract,
+   never paid to the buyer, only if someone passes). Only the pass count is revealed, never which tests failed.
 
 Every tool refuses arguments it does not know, naming the unknown field, so a
 misspelled argument is never silently ignored.

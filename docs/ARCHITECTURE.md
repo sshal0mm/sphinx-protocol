@@ -34,13 +34,15 @@ Buyer                 Contract                Relayer          Grader (TDX)     
   |                     |                        |--grade(code)---->| runs hidden     |
   |                     |                        |<--signed score---| tests, signs    |
   |                     |<--record_score---------|                  |                 |
-  |                     |  pass: pay agent + fee; fail: bond burned on payout          |
+  |                     |  pass: pay agent + fee; fail: bond kept on payout            |
 ```
 
 The relayer is stateless: each pass reads every active job from the chain and
 does whatever is due (a suite check, a score, returning the bond of a
 submission left pending when its job ended). A duplicate post is refused by
-the contract and treated as done, so several relayers can run at once. Before
+the contract and treated as done, so several copies can run at once, all
+signing as the grader's caller: only that account can start a grading run,
+because the grader's keys are bound to it. Before
 paying for an enclave run it checks that the job is still waiting and that the
 buyer's hidden suite is stored.
 
