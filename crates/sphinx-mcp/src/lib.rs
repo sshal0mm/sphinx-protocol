@@ -22,7 +22,7 @@ use rmcp::{tool, tool_handler, tool_router, ServerHandler};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use sphinx_near::near_api::types::{AccountId, NearGas, NearToken};
+use sphinx_near::near_api::types::{AccountId, NearToken};
 use sphinx_near::near_api::{Contract, Signer};
 use sphinx_near::views::{Config, Job, JobStatus, Submission};
 use sphinx_near::Escrow;
@@ -1052,7 +1052,7 @@ impl SphinxMcp {
             .call_function(method, args.clone())
             .transaction()
             .deposit(NearToken::from_yoctonear(deposit_yocto))
-            .gas(NearGas::from_tgas(80))
+            .gas(sphinx_near::call_gas(method))
             .with_signer(id.account.clone(), id.signer.clone());
         // The relay pays only for calls without a deposit (NEAR would charge
         // a relayed deposit to the relay); the rest are sent and paid here.
@@ -1100,7 +1100,7 @@ impl SphinxMcp {
                 method,
                 args,
                 NearToken::from_yoctonear(deposit_yocto),
-                NearGas::from_tgas(80),
+                sphinx_near::call_gas(method),
             )
             .await?;
         Ok(json!({ "tx_hash": outcome.tx_hash, "returned": outcome.value, "gas_paid_by": "agent" }))

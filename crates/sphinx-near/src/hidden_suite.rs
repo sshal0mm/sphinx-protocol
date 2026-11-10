@@ -157,6 +157,15 @@ fn bad_keystore_key() -> SphinxError {
     SphinxError::new(Code::ApiBadRequest, "keystore public key is not 32 hex bytes")
 }
 
+/// Gas for `store_secrets` with `arg_bytes` of arguments: it burns about
+/// 3.5 Tgas plus about 2.2 Mgas per argument byte, so 10 Tgas plus 3 Mgas a
+/// byte, capped at the 300 Tgas a transaction may carry. A cap any higher only
+/// raises what the sender must hold before sending.
+fn store_gas(arg_bytes: usize) -> NearGas {
+    let tgas = 10 + (arg_bytes as u64).saturating_mul(3_000_000) / 1_000_000_000_000;
+    NearGas::from_tgas(tgas.min(300))
+}
+
 impl Keystore {
     /// OutLayer testnet.
     pub fn testnet() -> Self {
@@ -276,11 +285,12 @@ impl Keystore {
     ) -> Result<CallOutcome, SphinxError> {
         let (args, deposit) =
             self.prepare_store(network, &buyer, profile, wasm_sha256, relayer, values).await?;
+        let gas = store_gas(args.to_string().len());
         let result = Contract(self.contract.clone())
             .call_function("store_secrets", args)
             .transaction()
             .deposit(deposit)
-            .gas(NearGas::from_tgas(100))
+            .gas(gas)
             .with_signer(buyer, signer)
             .send_to(network)
             .await
@@ -333,7 +343,7 @@ impl Keystore {
                 json!({ "accessor": { "WasmHash": { "hash": wasm_sha256 } }, "profile": profile }),
             )
             .transaction()
-            .gas(NearGas::from_tgas(50))
+            .gas(NearGas::from_tgas(20))
             .with_signer(buyer, signer)
             .send_to(network)
             .await

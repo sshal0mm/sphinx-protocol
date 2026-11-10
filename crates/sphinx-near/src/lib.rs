@@ -55,6 +55,26 @@ pub const MAINNET_RPC: &[&str] = &[
     "https://rpc.mainnet.near.org",
 ];
 
+/// The gas to attach to an escrow call. NEAR makes the sender hold all of it
+/// at a pessimistic price before sending (on mainnet about 0.001 NEAR per
+/// Tgas), so each call gets a cap a few times what it burns on testnet, not
+/// more. Calls that pay out reserve 5 Tgas per transfer for its callback, and
+/// one call makes at most five (a reward and four bonds).
+#[must_use]
+pub fn call_gas(method: &str) -> NearGas {
+    let tgas = match method {
+        // Each burns under 4 Tgas.
+        "submit" | "post_job" | "commit_suite" | "register_agent" | "unregister_agent"
+        | "record_suite_check" | "set_grader_key" => 20,
+        // One transfer and its callback.
+        "reclaim_bond" | "withdraw" => 30,
+        // Up to five transfers and their callbacks: a paid score, settling,
+        // cancelling, refunding.
+        _ => 50,
+    };
+    NearGas::from_tgas(tgas)
+}
+
 /// Whether `account` lives on NEAR mainnet: its top-level name is `near`
 /// (`escrow.sphinx.near`). Everything else, `.testnet` included, is testnet.
 #[must_use]

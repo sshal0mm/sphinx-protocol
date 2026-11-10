@@ -77,12 +77,22 @@ require_tools() {
   done
 }
 
+# Gas cap for an escrow call, the same table as sphinx_near::call_gas: NEAR
+# makes the sender hold the whole cap at a pessimistic price before sending.
+call_gas() {
+  case "$1" in
+    submit|post_job|commit_suite|register_agent|unregister_agent|record_suite_check|set_grader_key) echo 20 ;;
+    reclaim_bond|withdraw) echo 30 ;;
+    *) echo 50 ;;
+  esac
+}
+
 # near_call SIGNER METHOD JSON [DEPOSIT] -> prints the return value; on
 # failure prints the Sphinx error code (if any) to stderr and returns 1.
 near_call() {
   local err; err=$(mktemp)
   if "$NEAR" contract call-function as-transaction "$SPHINX_CONTRACT" "$2" json-args "$3" \
-      prepaid-gas '100 Tgas' attached-deposit "${4:-0 NEAR}" sign-as "$1" \
+      prepaid-gas "$(call_gas "$2") Tgas" attached-deposit "${4:-0 NEAR}" sign-as "$1" \
       network-config "$NETWORK" sign-with-keychain send 2>"$err"; then
     rm -f "$err"
   else

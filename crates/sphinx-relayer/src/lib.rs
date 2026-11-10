@@ -11,7 +11,7 @@ pub mod plan;
 
 use serde_json::{json, Value};
 use sphinx_near::hidden_suite::{encrypt_submission, profile_for_job, Keystore};
-use sphinx_near::near_api::types::{AccountId, NearGas, NearToken};
+use sphinx_near::near_api::types::{AccountId, NearToken};
 use sphinx_near::near_api::Signer;
 use sphinx_near::outlayer::{Grader, SecretsRef};
 use sphinx_near::views::{Job, JobStatus, SubStatus, Submission};
@@ -415,7 +415,7 @@ impl Relayer {
                 method,
                 args,
                 NearToken::from_yoctonear(0),
-                NearGas::from_tgas(100),
+                sphinx_near::call_gas(method),
             )
             .await
         {
