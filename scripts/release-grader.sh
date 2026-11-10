@@ -79,7 +79,7 @@ echo "   output, build and caller match; the quote is checked offline by sphinx 
 echo "== register as $OWNER"
 REG=$("$NEAR" contract call-function as-transaction "$SPHINX_CONTRACT" set_grader_key json-args \
   "{\"public_key_hex\":\"$PK\",\"box_public_key_hex\":\"$BOX\",\"mode\":\"outlayer_tdx\",\"wasm_sha256\":\"$SHA\",\"attestation_ref\":\"$ATT_URL\"}" \
-  prepaid-gas '30 Tgas' attached-deposit '1 yoctoNEAR' sign-as "$OWNER" network-config "$NETWORK" \
+  prepaid-gas "${REGISTER_GAS_TGAS:-10} Tgas" attached-deposit '1 yoctoNEAR' sign-as "$OWNER" network-config "$NETWORK" \
   sign-with-keychain send 2>&1 | grep -oE 'Transaction ID: [A-Za-z0-9]+' | cut -d' ' -f3)
 [ -n "$REG" ] || { echo "set_grader_key failed" >&2; exit 1; }
 echo "   tx $REG"
