@@ -158,11 +158,11 @@ fn bad_keystore_key() -> SphinxError {
 }
 
 /// Gas for `store_secrets` with `arg_bytes` of arguments: it burns about
-/// 3.5 Tgas plus about 2.2 Mgas per argument byte, so 10 Tgas plus 3 Mgas a
+/// 3.5 Tgas plus about 2.2 Mgas per argument byte, so 6 Tgas plus 3 Mgas a
 /// byte, capped at the 300 Tgas a transaction may carry. A cap any higher only
 /// raises what the sender must hold before sending.
 fn store_gas(arg_bytes: usize) -> NearGas {
-    let tgas = 10 + (arg_bytes as u64).saturating_mul(3_000_000) / 1_000_000_000_000;
+    let tgas = 6 + (arg_bytes as u64).saturating_mul(3_000_000) / 1_000_000_000_000;
     NearGas::from_tgas(tgas.min(300))
 }
 
