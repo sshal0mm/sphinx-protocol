@@ -227,7 +227,7 @@ impl SphinxMcp {
         secret_bytes: usize,
     ) -> Result<(), SphinxError> {
         const PER_BYTE: u128 = 19_000_000_000_000_000_000;
-        const MARGIN: u128 = 50_000_000_000_000_000_000_000; // 0.05 NEAR: gas caps and fees
+        const MARGIN: u128 = 30_000_000_000_000_000_000_000; // 0.03 NEAR: gas caps and fees
         let id = self.settings.identity.as_ref().ok_or_else(need_identity)?;
         let keystore = (secret_bytes as u128).saturating_mul(PER_BYTE);
         let needed = deposit.saturating_add(keystore).saturating_add(MARGIN);
@@ -244,7 +244,7 @@ impl SphinxMcp {
             return Err(SphinxError::new(
                 Code::CliUsage,
                 format!(
-                    "{} holds {} NEAR; posting this job needs about {} NEAR (reward and job storage {}, keystore deposit about {}, gas and fees 0.05); nothing was posted",
+                    "{} holds {} NEAR; posting this job needs about {} NEAR (reward and job storage {}, keystore deposit about {}, gas and fees 0.03); nothing was posted",
                     id.account,
                     sphinx_near::format_near(balance),
                     sphinx_near::format_near(needed),
