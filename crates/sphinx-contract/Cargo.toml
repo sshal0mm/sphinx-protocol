@@ -6,6 +6,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
+repository = "https://github.com/sshal0mm/sphinx-protocol"
 publish = false
 
 [lib]
