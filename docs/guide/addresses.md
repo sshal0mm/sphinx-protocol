@@ -42,7 +42,7 @@ Live with real NEAR since 11 November 2026. The contract is a reproducible build
 | contract build (SHA-256) | `19f72965a4cb22bca26203ede178c34f684611c7f24c863aae74b69f0985d399`, from `sphinx-protocol` commit `afcb98a` |
 | enclave proof check | NEAR's verifier `tee-verifier-2026-08-04.near`, images from `worker.outlayer.near` |
 | access keys | none |
-| retire date | 1 December 2026 |
+| retire date | end of November 2026 (1 December, 00:00 UTC) |
 | grader build (SHA-256) | `60ba775f4163829baadc931de28c61493f6ed7dba352b34d2c18c10a68d17ff8`, the same build as testnet |
 | grader signing key | `2e92eeadd4d5b3f66038594493f261c5d9b9751da6417ae5de8fb14f8332fae7` |
 | grader box key | `cf626a58126813761a63b12c694e7b6d1d8c96d7a6f32673832a9c29561df03e` |

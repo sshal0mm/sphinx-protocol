@@ -7,7 +7,7 @@ again and runs the reproducible build `19f72965…d399` from
 `sphinx-protocol` `afcb98a`, with the on-chain enclave proof check (deploy
 `9ZEtGzxT…`, grader key `Bs12Lzx7…`, approved images `3tFeBzHA…`). Its only
 full-access key was deleted (`53wfG4vc…`), so it has no keys. After
-1 December the owner's `retire` returns agent deposits, stops new money and
+the end of November (`retire_after`, 1 December 00:00 UTC) the owner's `retire` returns agent deposits, stops new money and
 adds the owner's key, so the owner can clear the state and close the
 account. The records of both contracts verify with
 `sphinx verify --online deployments/runs/mainnet*.json`. What follows is how
