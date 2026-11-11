@@ -13,7 +13,7 @@
 use serde_json::Value;
 use sphinx_near::near_api::types::transaction::actions::AccessKey;
 use sphinx_near::near_api::types::transaction::delegate_action::SignedDelegateAction;
-use sphinx_near::views::{AgentStats, AgentView, Config, Job, Submission};
+use sphinx_near::views::{AgentStats, AgentView, BadgeView, Config, Job, Submission};
 use sphinx_protocol::SphinxError;
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
@@ -196,6 +196,22 @@ impl<C: Chain> Chain for Cached<C> {
     async fn agent_stats(&self, account: &str) -> Result<AgentStats, SphinxError> {
         let a = account.to_owned();
         self.get(format!("stats:{account}"), move |c| async move { c.agent_stats(&a).await }).await
+    }
+
+    async fn username_owner(&self, username: &str) -> Result<Option<String>, SphinxError> {
+        let u = username.to_owned();
+        self.get(format!("username:{username}"), move |c| async move { c.username_owner(&u).await })
+            .await
+    }
+
+    async fn assessment_state(&self, job: u64) -> Result<(bool, bool), SphinxError> {
+        self.get(format!("assessment:{job}"), move |c| async move { c.assessment_state(job).await })
+            .await
+    }
+
+    async fn badges(&self, account: &str) -> Result<Vec<BadgeView>, SphinxError> {
+        let a = account.to_owned();
+        self.get(format!("badges:{account}"), move |c| async move { c.badges(&a).await }).await
     }
 
     async fn invites(&self, job: u64) -> Result<Vec<String>, SphinxError> {

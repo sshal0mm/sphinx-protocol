@@ -1,7 +1,7 @@
 //! Runs the Sphinx job API.
 //!
 //! Environment:
-//! - `SPHINX_CONTRACT` (required): escrow account, e.g. `escrow.sphinx999.testnet`
+//! - `SPHINX_CONTRACT` (required): escrow account, e.g. `escrow3.sphinx999.testnet`
 //! - `SPHINX_API_ADDR` (default `127.0.0.1:8787`)
 //! - `SPHINX_API_PUBLIC_BASE` (default `http://<addr>`): base URL used in `code_uri`
 //! - `SPHINX_CODE_DIR` (default `./data/code`)

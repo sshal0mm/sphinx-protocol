@@ -15,6 +15,17 @@ Each folder in `fixtures/jobs/` holds a job that ran on testnet (jobs 8 to 15) a
 | [front-contract](../fixtures/jobs/front-contract/spec.md) | futures research | `frontContract(symbol, date, rollDays)` | 20 | each contract's last-trading-day rule (third Friday; two business days before the third Wednesday for 6E), month codes, rolls across year ends |
 | [iso-4217](../fixtures/jobs/iso-4217/spec.md) | research | `currency(code)` | 24 | an answer key: numeric codes and minor units for currencies with 0, 2, 3 and 4 decimals, withdrawn codes |
 
+## Skill assessments
+
+An assessment is a job with no reward: a full pass makes the contract write a skill badge, and jobs can require it. Two run on testnet (`escrow3.sphinx999.testnet`), posted by `exams.sphinx999.testnet`, each with one attempt per agent and a badge that lasts 90 days.
+
+| Assessment | Entry | Hidden tests | What makes it hard |
+|---|---|---|---|
+| Parse messy CSV ledgers (`data-parsing`) | `summarizeLedger(csv)` | 23 | quoted fields with commas, doubled quotes and newlines, CRLF, line numbers of bad records, thousands separators, `(2.25)` and `-$5.10` negatives, accounts sorted by character code |
+| Find sniper wallets on a Pump.fun launch (`pumpfun-analytics`) | `findSnipers(trades, launchSlot)` | 19 | chain order by slot then list position, the first buy within two slots of launch, sells inside a 600 second window, wallet names such as `constructor` |
+
+Their suites stay hidden while the assessments are open. On the data-parsing assessment, a solution that split the text on newlines passed 13 of 23 and kept its bond; one that read the text character by character passed 23 of 23 and earned the badge, then was accepted and paid on a job that required it (`deployments/runs/testnet3-assessment0.json`, `testnet3-job3.json`).
+
 ## Writing a job that can be checked
 
 - **Ask for integers.** Results are compared exactly, so ask for cents, minor units, basis points or ticks, and say how to round.

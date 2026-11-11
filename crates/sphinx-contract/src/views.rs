@@ -5,9 +5,9 @@ use near_sdk::{env, near, AccountId};
 use sphinx_protocol::SUPPORTED_RUNTIMES;
 
 use crate::constants::{
-    AGENT_STORAGE_DEPOSIT, GRADING_WINDOW_NS, JOB_STORAGE_DEPOSIT, MAX_INVITES,
-    MAX_JOB_DURATION_NS, MAX_SUBS_TOTAL, MAX_URI_LEN, MIN_BOND, MIN_JOB_DURATION_NS, MIN_REWARD,
-    SUBMISSION_STORAGE_DEPOSIT,
+    AGENT_STORAGE_DEPOSIT, ASSESSMENT_BADGE_DEPOSIT, GRADING_WINDOW_NS, JOB_STORAGE_DEPOSIT,
+    MAX_INVITES, MAX_JOB_DURATION_NS, MAX_SUBS_TOTAL, MAX_URI_LEN, MIN_BOND, MIN_JOB_DURATION_NS,
+    MIN_REWARD, SUBMISSION_STORAGE_DEPOSIT, WIN_FLOOR,
 };
 use crate::errors::Result;
 use crate::types::{AgentUse, Config, GraderKey, Job, Stats, Submission};
@@ -27,6 +27,8 @@ impl Sphinx {
             enclave: self.enclave.clone(),
             retire_after_ns: self.retire_after_ns.map(U64),
             job_storage_deposit: U128(JOB_STORAGE_DEPOSIT.as_yoctonear()),
+            assessment_badge_deposit: U128(ASSESSMENT_BADGE_DEPOSIT.as_yoctonear()),
+            win_floor: U128(WIN_FLOOR.as_yoctonear()),
             submission_storage_deposit: U128(SUBMISSION_STORAGE_DEPOSIT.as_yoctonear()),
             agent_storage_deposit: U128(AGENT_STORAGE_DEPOSIT.as_yoctonear()),
             max_invites: u32::try_from(MAX_INVITES).unwrap_or(u32::MAX),

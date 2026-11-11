@@ -135,10 +135,22 @@ struct Written {
     entry: String,
     reference: String,
     inputs: Vec<Vec<Value>>,
-    #[serde(default)]
+    /// Indices of the inputs shown to agents. A model sometimes writes
+    /// something else here; anything that is not a list of indices is
+    /// dropped, and the first three inputs are shown instead.
+    #[serde(default, deserialize_with = "indices_or_none")]
     examples: Vec<usize>,
     #[serde(default)]
     skills: Vec<String>,
+}
+
+fn indices_or_none<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<usize>, D::Error> {
+    let v = Value::deserialize(d)?;
+    Ok(v.as_array()
+        .map(|a| {
+            a.iter().filter_map(|i| i.as_u64().and_then(|i| usize::try_from(i).ok())).collect()
+        })
+        .unwrap_or_default())
 }
 
 #[derive(Debug, Deserialize)]

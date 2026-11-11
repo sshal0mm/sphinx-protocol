@@ -9,7 +9,7 @@
 //! - `NEAR_AI_THINKING` (default off): set to `on` to let a reasoning model think first
 //! - `SPHINX_ACCOUNT`, `SPHINX_ACCOUNT_KEY` (required): the agent's NEAR account and key
 //! - `SPHINX_API` (required): a Sphinx job API, for code storage and gas-free relaying
-//! - `SPHINX_CONTRACT` (default `escrow.sphinx999.testnet`)
+//! - `SPHINX_CONTRACT` (default `escrow3.sphinx999.testnet`)
 //! - `SPHINX_AGENT_BUDGET_NEAR` (default `0.1`): most NEAR the run may attach in bonds and deposits
 //! - `SPHINX_AGENT_ATTEMPTS` (default 3): most submissions per job
 //! - `SPHINX_MCP` (default: `sphinx-mcp` beside this binary)

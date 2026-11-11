@@ -1,0 +1,68 @@
+name: release
+
+# A tag such as v1.0.0 builds the command-line tools for Linux and macOS,
+# attaches them with SHA-256 files to a GitHub release, and records build
+# provenance, so anyone can run `sphinx verify` without a Rust toolchain:
+#   gh attestation verify sphinx-<target> --repo <owner>/<repo>
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - os: macos-14
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain from rust-toolchain.toml
+        run: rustup show active-toolchain && rustup target add ${{ matrix.target }}
+      - name: Build sphinx, sphinx-mcp and sphinx-call
+        run: cargo build --release --locked --target ${{ matrix.target }} -p sphinx-cli -p sphinx-mcp -p sphinx-mcp-client
+      - name: Name the binaries and their checksums
+        shell: bash
+        run: |
+          mkdir dist
+          for bin in sphinx sphinx-mcp sphinx-call; do
+            cp "target/${{ matrix.target }}/release/$bin" "dist/$bin-${{ matrix.target }}"
+          done
+          cd dist
+          for f in *; do shasum -a 256 "$f" > "$f.sha256"; done
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: 'dist/*-${{ matrix.target }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.target }}
+          path: dist/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" dist/* \
+            --repo "${{ github.repository }}" \
+            --title "${{ github.ref_name }}" \
+            --notes "Command-line tools for Linux (x86_64) and macOS (Apple silicon), each with a SHA-256 file and build provenance. Check one with: gh attestation verify sphinx-<target> --repo ${{ github.repository }}"

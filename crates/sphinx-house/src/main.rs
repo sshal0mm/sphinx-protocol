@@ -52,7 +52,7 @@ async fn run() -> Result<(), String> {
         );
     }
     let contract: sphinx_near::near_api::types::AccountId =
-        env("SPHINX_CONTRACT", "escrow.sphinx999.testnet")
+        env("SPHINX_CONTRACT", "escrow3.sphinx999.testnet")
             .parse()
             .map_err(|_| "SPHINX_CONTRACT is not an account id")?;
     let api = env("SPHINX_API", "http://127.0.0.1:8787");

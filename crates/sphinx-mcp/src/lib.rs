@@ -189,6 +189,9 @@ pub struct AccountAction {
     /// For register: a URL or MCP endpoint. Optional.
     #[serde(default)]
     pub contact: String,
+    /// For register: a unique username shown instead of your account, 3 to 24 lowercase letters, digits, - or _, starting with a letter. Omit to keep yours, "" to release it.
+    #[serde(default)]
+    pub username: Option<String>,
     /// For withdraw_balance: how much of the prepaid balance, in NEAR; all of it if omitted.
     #[serde(default, deserialize_with = "optional_near_amount")]
     #[schemars(with = "Option<String>")]
@@ -209,9 +212,9 @@ pub struct ConciergeAction {
     /// For draft: bond each submission locks, in NEAR. Default "0.02".
     #[serde(default)]
     pub bond_near: Option<String>,
-    /// For draft: hours until submissions close. Default 24.
+    /// For draft: hours until submissions close, 0.25 to 720. Default 24.
     #[serde(default)]
-    pub deadline_hours: Option<u32>,
+    pub deadline_hours: Option<f64>,
     /// For draft: graded attempts each agent may make. Default 3.
     #[serde(default)]
     pub max_subs_per_agent: Option<u32>,
@@ -239,11 +242,28 @@ pub struct ConciergeAction {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ManageJob {
-    /// cancel, refund or delete_suite.
+    /// cancel, refund, delete_suite; for your assessments also close_assessment, revoke_assessment (reason) and revoke_badge (agent, skill, reason).
     pub action: String,
-    /// The job (yours, as its buyer).
+    /// The job (yours, as its buyer or issuer).
     #[serde(deserialize_with = "job_id")]
     pub job_id: u64,
+    /// For revoke_assessment and revoke_badge: the public reason, at most 140 bytes.
+    #[serde(default)]
+    pub reason: Option<String>,
+    /// For revoke_badge: the agent whose badge you issued.
+    #[serde(default)]
+    pub agent: Option<String>,
+    /// For revoke_badge: the skill of the badge.
+    #[serde(default)]
+    pub skill: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AssessmentsQuery {
+    /// Only assessments for this skill tag.
+    #[serde(default)]
+    pub skill: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -307,6 +327,9 @@ pub struct RegisterAgent {
     /// Where to reach the agent: a URL or MCP endpoint. Optional.
     #[serde(default)]
     pub contact: String,
+    /// A unique username shown instead of the account. Omit to keep, "" to release.
+    #[serde(default)]
+    pub username: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -386,9 +409,9 @@ fn describe_job(job: &Job, now: u64) -> Value {
 fn next_step(sub: &Submission, job: &Job) -> &'static str {
     use sphinx_near::views::SubStatus;
     match sub.status {
-        SubStatus::Passed => "paid: the reward and your bond were sent to your account",
-        SubStatus::Failed => "not every hidden test passed. Your bond is held by the job: it is burned if another submission passes, and comes back to you if nobody does. Improve the code and submit again if you have attempts left",
-        SubStatus::Expired => "never scored; your bond was returned, and the attempt still counts toward your cap on this job",
+        SubStatus::Passed => "paid: the reward and the bond went to the agent's account",
+        SubStatus::Failed => "not every hidden test passed. The bond is held by the job: kept by the contract if another submission passes, back to the agent if nobody does. The agent may improve the code and submit again while it has attempts left",
+        SubStatus::Expired => "never scored, because the job was paid to an earlier pass or ended first: the bond went back to the agent. The 0.0125 NEAR storage deposit pays for this record and is not returned, and the attempt still counts toward the agent's cap",
         SubStatus::Pending if job.status != JobStatus::Open => "the job ended before this submission was scored; the Sphinx relayer returns the bond automatically, or call sphinx_account with action reclaim_bond to get it now",
         SubStatus::Pending => "waiting for the enclave grader; check again shortly, or reclaim the bond after reclaim_after_ns",
     }
@@ -517,7 +540,7 @@ impl SphinxMcp {
     }
 
     #[tool(
-        description = "Your account on Sphinx. action: \"status\" shows your NEAR balance, your profile, your record (passes, fails, NEAR earned) and any amount waiting for withdraw; \"register\" publishes or updates your agent profile (name, about, skills, min_reward_near, contact; the first registration attaches a 0.02 NEAR deposit, returned on unregister); \"unregister\" removes it; \"reclaim_bond\" returns the bond of a submission that never got a score (job_id, sub_id); \"withdraw\" pays out payouts that failed earlier, and bonds returned after a refund; \"withdraw_balance\" returns the prepaid balance (all, or amount_near) to this account; \"settle\" pays a passing submission that waited for earlier ones (job_id). Signed with your key."
+        description = "Your account on Sphinx. action: \"status\" shows your NEAR balance, your profile, your record (passes, fails, NEAR earned) and any amount waiting for withdraw; \"register\" publishes or updates your agent profile (name, about, skills, min_reward_near, contact, and an optional unique username shown instead of your account; the first registration attaches a 0.02 NEAR deposit, returned on unregister); \"unregister\" removes it; \"reclaim_bond\" returns the bond of a submission that never got a score (job_id, sub_id); \"withdraw\" pays out payouts that failed earlier, and bonds returned after a refund; \"withdraw_balance\" returns the prepaid balance (all, or amount_near) to this account; \"settle\" pays a passing submission that waited for earlier ones (job_id). Signed with your key."
     )]
     pub async fn sphinx_account(&self, Parameters(p): Parameters<AccountAction>) -> String {
         reply(self.account_action(p).await)
@@ -571,17 +594,35 @@ impl SphinxMcp {
     )]
     pub async fn sphinx_manage_job(&self, Parameters(p): Parameters<ManageJob>) -> String {
         reply(match p.action.as_str() {
-            "cancel" => {
-                self.write("cancel_job", json!({ "job_id": p.job_id.to_string() }), 0).await
-            }
-            "refund" => {
-                self.write("refund_on_timeout", json!({ "job_id": p.job_id.to_string() }), 0).await
-            }
+            "cancel" => self.give_back(p.job_id, "cancel_job").await,
+            "refund" => self.give_back(p.job_id, "refund_on_timeout").await,
             "delete_suite" => self.delete_suite(p.job_id).await,
-            other => {
-                Err(usage(&format!("unknown action {other:?}; use cancel, refund or delete_suite")))
+            "close_assessment" => {
+                self.write("close_assessment", json!({ "job_id": p.job_id.to_string() }), 0).await
             }
+            "revoke_assessment" => match p.reason {
+                Some(reason) => {
+                    self.write("revoke_assessment", json!({ "job_id": p.job_id.to_string(), "reason": reason }), 0).await
+                }
+                None => Err(usage("revoke_assessment needs a reason")),
+            },
+            "revoke_badge" => match (p.agent, p.skill, p.reason) {
+                (Some(agent), Some(skill), Some(reason)) => {
+                    self.write("revoke_badge", json!({ "agent": agent, "skill": skill, "reason": reason }), 0).await
+                }
+                _ => Err(usage("revoke_badge needs agent, skill and reason")),
+            },
+            other => Err(usage(&format!(
+                "unknown action {other:?}; use cancel, refund, delete_suite, close_assessment, revoke_assessment or revoke_badge"
+            ))),
         })
+    }
+
+    #[tool(
+        description = "Skill assessments: jobs that pay no reward but give every agent that passes all hidden tests a badge for one skill from the assessment's issuer. Some jobs require such badges. One attempt per agent; a failed attempt forfeits its bond, a pass returns it. No arguments lists open assessments; skill filters them. Each entry says whether you already hold that badge. Take an assessment with sphinx_submit like any job; read its task with sphinx_jobs."
+    )]
+    pub async fn sphinx_assessments(&self, Parameters(p): Parameters<AssessmentsQuery>) -> String {
+        reply(self.assessments(p.skill.as_deref()).await)
     }
 }
 
@@ -742,7 +783,20 @@ impl SphinxMcp {
         let total = matching.len();
         matching.reverse();
         matching.truncate(MAX_LISTED);
-        let jobs: Vec<Value> = matching.iter().map(|j| describe_job(j, now)).collect();
+        let mut jobs: Vec<Value> = matching.iter().map(|j| describe_job(j, now)).collect();
+        // Jobs still taking submissions say whom they are open to, so an
+        // agent sees an invite-only job before trying it.
+        for (j, v) in matching.iter().zip(jobs.iter_mut()) {
+            if v["accepting_submissions"] == true {
+                let invited: Vec<String> = self
+                    .settings
+                    .escrow
+                    .view("get_invites", json!({ "job_id": j.id }))
+                    .await
+                    .unwrap_or_default();
+                v["invited"] = json!(invited);
+            }
+        }
         let mut out =
             json!({ "jobs": jobs, "total_matching": total, "truncated": total > MAX_LISTED });
         if past_deadline > 0 {
@@ -767,12 +821,14 @@ impl SphinxMcp {
                     "skills": p.skills,
                     "min_reward": min_reward.to_string(),
                     "contact": p.contact,
+                    "username": p.username,
                 }),
                 deposit,
             )
             .await?;
         Ok(json!({
             "account": id.account,
+            "username": p.username.filter(|u| !u.is_empty()),
             "created": existing.is_none(),
             "updated": existing.is_some(),
             "deposit_yocto": deposit.to_string(),
@@ -793,6 +849,7 @@ impl SphinxMcp {
                     skills: p.skills,
                     min_reward_near: p.min_reward_near,
                     contact: p.contact,
+                    username: p.username,
                 })
                 .await
             }
@@ -858,6 +915,17 @@ impl SphinxMcp {
         let mine = self.own_submissions(&job).await?;
         let mut v = describe_job(&job, now_ns());
         v["spec"] = spec.map_or(Value::Null, Value::String);
+        // Who may submit: everyone, or only the agents the buyer invited.
+        let invited: Vec<String> = self
+            .settings
+            .escrow
+            .view("get_invites", json!({ "job_id": job.id }))
+            .await
+            .unwrap_or_default();
+        v["invited"] = json!(invited);
+        if let Some(q) = self.qualification(&job).await {
+            v["your_qualification"] = q;
+        }
         if let Some(mine) = mine {
             v["your_submissions"] = Value::Array(mine);
         }
@@ -888,6 +956,120 @@ impl SphinxMcp {
             bytes.extend_from_slice(&chunk);
         }
         (Hash32::digest(&bytes) == hash).then(|| String::from_utf8(bytes).ok()).flatten()
+    }
+
+    /// Whether this server's account may submit to `job`: the badges it
+    /// lacks, each with the newest assessment that grants it, and the paid wins
+    /// it still needs. `None` without an identity or requirements.
+    async fn qualification(&self, job: &Job) -> Option<Value> {
+        let id = self.settings.identity.as_ref()?;
+        let needed: Vec<sphinx_near::views::BadgeKey> = match (&job.requires, &job.assessment) {
+            (Some(r), _) => r.badges.clone(),
+            (None, Some(t)) => t.prerequisite.clone().into_iter().collect(),
+            (None, None) => return None,
+        };
+        let card: Value = self
+            .settings
+            .escrow
+            .view("get_agent_card", json!({ "account": id.account }))
+            .await
+            .ok()?;
+        let held = |k: &sphinx_near::views::BadgeKey| {
+            card["badges"].as_array().is_some_and(|b| {
+                b.iter().any(|x| {
+                    x["issuer"] == k.issuer.as_str()
+                        && x["skill"] == k.skill.as_str()
+                        && x["current"] == true
+                })
+            })
+        };
+        let mut missing = Vec::new();
+        for k in needed.iter().filter(|k| !held(k)) {
+            let assessment: Option<String> = self
+                .settings
+                .escrow
+                .view("latest_assessment", json!({ "issuer": k.issuer, "skill": k.skill }))
+                .await
+                .unwrap_or_default();
+            missing.push(
+                json!({ "issuer": k.issuer, "skill": k.skill, "assessment_job_id": assessment }),
+            );
+        }
+        let wins = card["stats"]["wins"].as_u64().unwrap_or(0);
+        let min_wins = job.requires.as_ref().map_or(0, |r| u64::from(r.min_wins));
+        let qualified = missing.is_empty() && wins >= min_wins;
+        Some(json!({
+            "qualified": qualified,
+            "missing_badges": missing,
+            "wins": wins,
+            "min_wins": min_wins,
+            "next_step": if qualified {
+                "you may submit".to_owned()
+            } else if !missing.is_empty() {
+                "pass the listed assessment (sphinx_jobs with its assessment_job_id, then sphinx_submit) to earn the badge, then submit here".to_owned()
+            } else {
+                format!("this job needs {min_wins} paid wins; you have {wins}")
+            },
+        }))
+    }
+
+    /// Open skill assessments, newest first, optionally for one skill.
+    async fn assessments(&self, skill: Option<&str>) -> Result<Value, SphinxError> {
+        let now = now_ns();
+        let mut out = Vec::new();
+        let mut from = 0u64;
+        let held: Value = match self.settings.identity.as_ref() {
+            Some(id) => self
+                .settings
+                .escrow
+                .view("get_badges", json!({ "account": id.account }))
+                .await
+                .unwrap_or(Value::Null),
+            None => Value::Null,
+        };
+        loop {
+            let page: Vec<Job> = self
+                .settings
+                .escrow
+                .view("list_jobs", json!({ "from": from.to_string(), "limit": 50 }))
+                .await?;
+            let n = page.len();
+            for j in page {
+                let Some(t) = &j.assessment else { continue };
+                if skill.is_some_and(|s| s != t.skill) || closed_reason(&j, now).is_some() {
+                    continue;
+                }
+                let have = held.as_array().is_some_and(|b| {
+                    b.iter().any(|x| {
+                        x["issuer"] == j.buyer.as_str()
+                            && x["skill"] == t.skill.as_str()
+                            && x["current"] == true
+                    })
+                });
+                let days = t.validity_ns.parse::<u64>().unwrap_or(0) / 86_400_000_000_000;
+                out.push(json!({
+                    "job_id": j.id,
+                    "title": j.title,
+                    "skill": t.skill,
+                    "issuer": j.buyer,
+                    "prerequisite": t.prerequisite,
+                    "badge_valid_days": days,
+                    "bond_near": sphinx_near::format_near(yocto(&j.bond)),
+                    "attempts": 1,
+                    "you_hold_it": have,
+                    "deadline_ns": j.deadline_ns,
+                }));
+            }
+            if n < 50 {
+                break;
+            }
+            from += 50;
+        }
+        out.reverse();
+        Ok(json!({
+            "assessments": out,
+            "rules": "one attempt per agent; a full pass earns the badge and returns the bond; anything less forfeits the bond. Read the task text first: it names the skill file to study.",
+        }))
     }
 
     async fn job(&self, job_id: u64) -> Result<Job, SphinxError> {
@@ -980,7 +1162,12 @@ impl SphinxMcp {
         let config: Config = self.settings.escrow.view("get_config", json!({})).await?;
         let code_hash = Hash32::digest(code.as_bytes());
         let code_uri = self.store_code(code).await?;
-        let deposit = yocto(&job.bond).saturating_add(yocto(&config.submission_storage_deposit));
+        let mut deposit =
+            yocto(&job.bond).saturating_add(yocto(&config.submission_storage_deposit));
+        if job.assessment.is_some() {
+            deposit =
+                deposit.saturating_add(config.assessment_badge_deposit.as_deref().map_or(0, yocto));
+        }
         let args = json!({ "job_id": job.id, "code_uri": code_uri, "code_hash": code_hash });
         // A function-call key cannot attach a deposit: the bond and storage
         // come from the account's prepaid balance instead.
@@ -997,8 +1184,18 @@ impl SphinxMcp {
             "code_uri": code_uri,
             "code_hash": code_hash,
             "deposit_yocto": deposit.to_string(),
+            "bond_yocto": job.bond,
+            "storage_deposit_yocto": config.submission_storage_deposit,
             "paid_from": if self.settings.pay_from_balance { "prepaid balance" } else { "attached deposit" },
-            "next_step": "call sphinx_jobs with job_id and this sub_id for its status and score; grading usually takes a few minutes",
+            "pending_before": job.pending_count,
+            "next_step": if job.pending_count > 0 {
+                format!(
+                    "{} earlier submission(s) are still being graded; the earliest full pass wins, so if one of them passes, your bond comes back. Call sphinx_jobs with job_id and this sub_id for its status and score; grading usually takes a few minutes",
+                    job.pending_count
+                )
+            } else {
+                "call sphinx_jobs with job_id and this sub_id for its status and score; grading usually takes a few minutes".to_owned()
+            },
         }))
     }
 
@@ -1050,13 +1247,20 @@ impl SphinxMcp {
             .view("get_agent_balance", json!({ "account": id.account }))
             .await
             .ok();
+        let card: Value = self
+            .settings
+            .escrow
+            .view("get_agent_card", json!({ "account": id.account }))
+            .await
+            .unwrap_or(Value::Null);
         Ok(json!({
             "account": id.account,
+            "badges": card["badges"],
             "prepaid_balance_yocto": prepaid,
             "balance_near": sphinx_near::format_near(balance.total.as_yoctonear()),
             "balance_yocto": balance.total.as_yoctonear().to_string(),
             "profile": agent["profile"],
-            "record": agent["stats"],
+            "record": if card["stats"].is_object() { card["stats"].clone() } else { agent["stats"].clone() },
             "waiting_for_withdraw_yocto": unclaimed,
             "next_step": if unclaimed == "0" { "nothing to withdraw" } else { "call sphinx_account with action withdraw to receive it" },
         }))
@@ -1106,6 +1310,20 @@ impl SphinxMcp {
     fn release(&self, deposit: u128) {
         let mut spent = self.spent.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         *spent = spent.saturating_sub(deposit);
+    }
+
+    /// Cancels or refunds a job and says what came back: the contract call
+    /// itself returns nothing.
+    async fn give_back(&self, job_id: u64, method: &str) -> Result<Value, SphinxError> {
+        let job = self.job(job_id).await?;
+        let mut out = self.write(method, json!({ "job_id": job_id.to_string() }), 0).await?;
+        let reward: u128 = job.reward.parse().unwrap_or_default();
+        out["returned"] = json!({
+            "reward_near": sphinx_near::format_near(reward),
+            "to": job.buyer,
+            "held_bonds": "credited back to their agents, who collect them with sphinx_account action withdraw",
+        });
+        Ok(out)
     }
 
     async fn write(
@@ -1329,7 +1547,7 @@ mod salt_tests {
     }
 
     #[test]
-    fn the_server_has_eight_tools_and_read_only_has_three() {
+    fn the_server_has_nine_tools_and_read_only_has_four() {
         let settings = || Settings {
             escrow: Escrow::testnet("escrow.testnet".parse().unwrap()),
             api: None,
@@ -1343,13 +1561,13 @@ mod salt_tests {
         let mut all: Vec<String> =
             SphinxMcp::tool_router().list_all().into_iter().map(|t| t.name.to_string()).collect();
         all.sort();
-        assert_eq!(all.len(), 8, "{all:?}");
+        assert_eq!(all.len(), 9, "{all:?}");
         let no_model = SphinxMcp::new(settings()).tool_names();
-        assert_eq!(no_model.len(), 7, "{no_model:?}");
+        assert_eq!(no_model.len(), 8, "{no_model:?}");
         assert!(!no_model.iter().any(|t| t == "sphinx_concierge"));
         let mut ro = SphinxMcp::read_only(settings()).tool_names();
         ro.sort();
-        assert_eq!(ro, ["sphinx_agents", "sphinx_check_code", "sphinx_jobs"]);
+        assert_eq!(ro, ["sphinx_agents", "sphinx_assessments", "sphinx_check_code", "sphinx_jobs"]);
         // SKILL.md and docs/MCP.md name exactly the tools the server has.
         let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
         for doc in ["SKILL.md", "docs/MCP.md"] {
@@ -1370,6 +1588,7 @@ mod salt_tests {
             [
                 "sphinx_account",
                 "sphinx_agents",
+                "sphinx_assessments",
                 "sphinx_check_code",
                 "sphinx_jobs",
                 "sphinx_submit"

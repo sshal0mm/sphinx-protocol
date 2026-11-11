@@ -33,7 +33,22 @@ fn job(id: u64, status: JobStatus) -> Job {
     .unwrap()
 }
 
+/// A skill assessment the fake chain reports as closed.
+fn assessment(id: u64) -> Job {
+    let mut v = serde_json::to_value(job(id, JobStatus::Cancelled)).unwrap();
+    v["reward"] = json!("0");
+    v["assessment"] =
+        json!({ "skill": "data-parsing", "validity_ns": "86400000000000", "prerequisite": null });
+    serde_json::from_value(v).unwrap()
+}
+
 impl Chain for FakeChain {
+    async fn username_owner(&self, username: &str) -> Result<Option<String>, SphinxError> {
+        Ok((username == "ada_solver").then(|| "solver.testnet".to_owned()))
+    }
+    async fn assessment_state(&self, job: u64) -> Result<(bool, bool), SphinxError> {
+        Ok((job == 3, false))
+    }
     async fn config(&self) -> Result<Config, SphinxError> {
         Err(SphinxError::new(Code::RelayRpcFailed, "get_config failed: offline"))
     }
@@ -66,6 +81,19 @@ impl Chain for FakeChain {
     async fn agent_stats(&self, _: &str) -> Result<sphinx_near::views::AgentStats, SphinxError> {
         Ok(sphinx_near::views::AgentStats::default())
     }
+    async fn badges(
+        &self,
+        account: &str,
+    ) -> Result<Vec<sphinx_near::views::BadgeView>, SphinxError> {
+        if account != "solver.testnet" {
+            return Ok(Vec::new());
+        }
+        Ok(vec![serde_json::from_value(json!({
+            "issuer": "sphinx.testnet", "skill": "data-parsing", "assessment_job_id": "4", "sub_id": 1,
+            "earned_at_ns": "1", "valid_until_ns": "9", "revoked_at_ns": null, "current": true
+        }))
+        .unwrap()])
+    }
     async fn invites(&self, _: u64) -> Result<Vec<String>, SphinxError> {
         Ok(Vec::new())
     }
@@ -96,7 +124,12 @@ fn app() -> axum::Router {
     let dir = std::env::temp_dir().join(format!("sphinx-api-test-{}", std::process::id()));
     router(Arc::new(AppState {
         chain: FakeChain {
-            jobs: vec![job(0, JobStatus::Paid), job(1, JobStatus::Open), job(2, JobStatus::Open)],
+            jobs: vec![
+                job(0, JobStatus::Paid),
+                job(1, JobStatus::Open),
+                job(2, JobStatus::Open),
+                assessment(3),
+            ],
         },
         code: CodeStore::new(dir),
         public_base: "https://api.example".into(),
@@ -265,6 +298,10 @@ async fn the_directory_and_any_accounts_record_are_served() {
         (s, v["account"].as_str(), v["uid"].as_str()),
         (StatusCode::OK, Some("solver.testnet"), Some(uid.as_str()))
     );
+    let badge = &v["badges"][0];
+    assert_eq!(badge["skill"], "data-parsing");
+    assert_eq!(badge["assessment_uid"], sphinx_near::uid::job_uid("escrow.testnet", 4).as_str());
+    assert_eq!(badge["sub_uid"], sphinx_near::uid::submission_uid("escrow.testnet", 4, 1).as_str());
     let unknown = sphinx_near::uid::agent_uid("escrow.testnet", "nobody.testnet");
     let (s, _, _) = call(app(), "GET", &format!("/v1/agents/{unknown}"), Body::empty()).await;
     assert_eq!(s, StatusCode::NOT_FOUND);
@@ -272,6 +309,7 @@ async fn the_directory_and_any_accounts_record_are_served() {
     assert_eq!(s, StatusCode::OK);
     assert_eq!((v["account"].as_str(), v["profile"].is_null()), (Some("agent-a.testnet"), true));
     assert_eq!(v["stats"]["passes"], 0);
+    assert_eq!(v["badges"], json!([]));
     let (s, _, _) = call(app(), "GET", "/v1/agents/UPPER-CASE.testnet", Body::empty()).await;
     assert_eq!(s, StatusCode::UNPROCESSABLE_ENTITY);
 }
@@ -286,4 +324,31 @@ async fn whole_lists_for_an_agent_and_the_newest_results_are_one_request() {
     assert_eq!((s, v), (StatusCode::OK, json!({ "account": "solver.testnet", "submissions": [] })));
     let (s, _, _) = call(app(), "GET", "/v1/agents/UPPER.testnet/submissions", Body::empty()).await;
     assert_eq!(s, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn assessments_are_listed_with_their_state() {
+    let (s, v, _) = call(app(), "GET", "/v1/assessments", Body::empty()).await;
+    assert_eq!(s, StatusCode::OK);
+    let assessments = v["assessments"].as_array().unwrap();
+    assert_eq!(assessments.len(), 1);
+    assert_eq!(assessments[0]["assessment"]["skill"], "data-parsing");
+    assert_eq!(
+        (assessments[0]["closed"].as_bool(), assessments[0]["revoked"].as_bool()),
+        (Some(true), Some(false))
+    );
+    let uid = assessments[0]["uid"].as_str().unwrap().to_owned();
+    let (_, one, _) = call(app(), "GET", &format!("/v1/jobs/{uid}"), Body::empty()).await;
+    assert_eq!(one["closed"], true);
+    let work = sphinx_near::uid::job_uid("escrow.testnet", 1);
+    let (_, one, _) = call(app(), "GET", &format!("/v1/jobs/{work}"), Body::empty()).await;
+    assert!(one.get("closed").is_none());
+}
+
+#[tokio::test]
+async fn an_agent_is_found_by_username_and_other_dotless_keys_are_accounts() {
+    let (s, v, _) = call(app(), "GET", "/v1/agents/ada_solver", Body::empty()).await;
+    assert_eq!((s, v["account"].as_str()), (StatusCode::OK, Some("solver.testnet")));
+    let (s, v, _) = call(app(), "GET", "/v1/agents/nobody_here", Body::empty()).await;
+    assert_eq!((s, v["account"].as_str()), (StatusCode::OK, Some("nobody_here")));
 }

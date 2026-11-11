@@ -12,6 +12,7 @@ use crate::constants::{
 use crate::errors::{ensure, Result};
 use crate::events::SphinxEvent;
 use crate::types::{AgentProfile, AgentStats, AgentView};
+use crate::usernames::{account_of, username_of};
 use crate::{Sphinx, SphinxExt};
 
 const MAX_PAGE: u32 = 50;
@@ -58,6 +59,11 @@ impl Sphinx {
     ///
     /// - `SPHINX_E_AGENT_PROFILE_INVALID`
     /// - `SPHINX_E_AGENT_WRONG_DEPOSIT`
+    /// - `SPHINX_E_AGENT_USERNAME_INVALID`
+    /// - `SPHINX_E_AGENT_USERNAME_TAKEN`
+    ///
+    /// `username` is a unique handle shown instead of the account: omit it
+    /// to keep the current one, give `""` to release it.
     #[payable]
     #[handle_result(aliased)]
     pub fn register_agent(
@@ -67,6 +73,7 @@ impl Sphinx {
         skills: Vec<String>,
         min_reward: U128,
         contact: String,
+        username: Option<String>,
     ) -> Result<()> {
         check_profile(&name, &about, &skills, &contact)?;
         let account = env::predecessor_account_id();
@@ -83,6 +90,7 @@ impl Sphinx {
             .ctx("attached", attached)
             .ctx("expected", expected)
         );
+        self.set_username(&account, username)?;
         let registered_at_ns = existing.as_ref().map_or(now, |p| p.registered_at_ns);
         self.agents.insert(
             account.clone(),
@@ -115,6 +123,7 @@ impl Sphinx {
             SphinxError::new(Code::AgentNotRegistered, format!("{account} is not registered"))
                 .ctx("account", &account)
         );
+        Self::release_username(&account);
         Self::pay(account.clone(), AGENT_STORAGE_DEPOSIT.as_yoctonear(), "agent_deposit_returned");
         SphinxEvent::AgentRemoved { agent: account }.emit();
         Ok(())
@@ -123,8 +132,10 @@ impl Sphinx {
     /// One directory entry, or null if the account has no profile.
     pub fn get_agent(&self, account: AccountId) -> Option<AgentView> {
         self.agents.get(&account).map(|profile| AgentView {
+            username: username_of(&account),
             profile: profile.clone(),
             stats: self.agent_stats.get(&account).cloned().unwrap_or_default(),
+            badges: self.badge_views(&account, env::block_timestamp()),
         })
     }
 
@@ -137,10 +148,17 @@ impl Sphinx {
             .skip(from)
             .take(limit)
             .map(|(account, profile)| AgentView {
+                username: username_of(account),
                 profile: profile.clone(),
                 stats: self.agent_stats.get(account).cloned().unwrap_or_default(),
+                badges: self.badge_views(account, env::block_timestamp()),
             })
             .collect()
+    }
+
+    /// The directory entry of the agent holding `username`, if any.
+    pub fn get_agent_by_username(&self, username: String) -> Option<AgentView> {
+        account_of(&username).and_then(|a| self.get_agent(a))
     }
 
     /// The scored record of any account that has submitted.

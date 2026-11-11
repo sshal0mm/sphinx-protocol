@@ -18,6 +18,7 @@
 #![allow(clippy::needless_pass_by_value)]
 
 mod agents;
+mod assessments;
 mod balances;
 mod constants;
 mod errors;
@@ -27,6 +28,7 @@ mod payouts;
 mod submissions;
 pub mod tee;
 pub mod types;
+mod usernames;
 mod views;
 
 #[cfg(test)]
@@ -41,7 +43,9 @@ use crate::constants::{MAX_ATTESTATION_REF_LEN, MAX_FEE_BPS};
 use crate::errors::{ensure, ContractError, Result};
 use crate::events::SphinxEvent;
 use crate::tee::EnclaveCheck;
-use crate::types::{AgentProfile, AgentStats, AgentUse, GraderKey, Job, KeyMode, Submission};
+use crate::types::{
+    AgentProfile, AgentStats, AgentUse, Badge, BadgeKey, GraderKey, Job, KeyMode, Submission,
+};
 
 #[near(serializers = [borsh])]
 #[derive(BorshStorageKey)]
@@ -61,6 +65,13 @@ pub(crate) enum StorageKey {
     /// Grading runs whose enclave proof was checked (`tee.rs`), until their
     /// signed result is recorded.
     ConfirmedRuns,
+    Badges,
+    AgentBadges,
+    ClosedAssessments,
+    RevokedAssessments,
+    LatestAssessment,
+    /// Agent usernames (`usernames.rs`), kept outside the contract struct.
+    Usernames,
 }
 
 #[near(
@@ -108,6 +119,16 @@ pub struct Sphinx {
     approved_images: Vec<[u8; 32]>,
     /// From this time the owner may close the contract, once it owes nothing.
     retire_after_ns: Option<u64>,
+    /// Badges by (agent, issuer and skill); see `assessments.rs`.
+    badges: LookupMap<(AccountId, BadgeKey), Badge>,
+    /// Each agent's badge names, for its card (at most 16).
+    agent_badges: LookupMap<AccountId, Vec<BadgeKey>>,
+    /// Assessments that take no new submissions.
+    closed_assessments: LookupSet<u64>,
+    /// Assessments whose badges were all revoked.
+    revoked_assessments: LookupSet<u64>,
+    /// The newest assessment per issuer and skill.
+    latest_assessment: LookupMap<BadgeKey, u64>,
 }
 
 #[near]
@@ -166,6 +187,11 @@ impl Sphinx {
             enclave,
             approved_images: Vec::new(),
             retire_after_ns: retire_after_ns.map(|t| t.0),
+            badges: LookupMap::new(StorageKey::Badges),
+            agent_badges: LookupMap::new(StorageKey::AgentBadges),
+            closed_assessments: LookupSet::new(StorageKey::ClosedAssessments),
+            revoked_assessments: LookupSet::new(StorageKey::RevokedAssessments),
+            latest_assessment: LookupMap::new(StorageKey::LatestAssessment),
         })
     }
 
@@ -410,5 +436,8 @@ impl Sphinx {
         self.agent_stats.flush();
         self.invites.flush();
         self.grader_history.flush();
+        self.badges.flush();
+        self.agent_badges.flush();
+        self.latest_assessment.flush();
     }
 }

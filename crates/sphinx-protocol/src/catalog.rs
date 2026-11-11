@@ -112,6 +112,14 @@ catalog! {
         "shorten the URI, for example to a content hash or short link";
     JobBadTitle => "SPHINX_E_JOB_BAD_TITLE", Contract, FixInput, None,
         "give the job a title of 1 to 80 characters on one line";
+    SubmitNotQualified => "SPHINX_E_SUBMIT_NOT_QUALIFIED", Contract, FixInput, None,
+        "earn the named badge by passing that skill assessment (contract view latest_assessment; MCP sphinx_assessments), then submit again";
+    AssessmentBadTerms => "SPHINX_E_ASSESSMENT_BAD_TERMS", Contract, FixInput, None,
+        "an assessment names one skill tag, a validity of 1 to 365 days, one attempt per agent and no reward";
+    AssessmentClosed => "SPHINX_E_ASSESSMENT_CLOSED", Contract, Never, None,
+        "this assessment takes no new submissions; look for a newer edition (contract view latest_assessment)";
+    BadgeNotFound => "SPHINX_E_BADGE_NOT_FOUND", Contract, FixInput, None,
+        "check the agent's badges (contract view get_badges)";
     EnclaveProofRefused => "SPHINX_E_ENCLAVE_PROOF_REFUSED", Contract, Never, None,
         "send the attestation, output, quote and collateral of this job's own grading run";
     EnclaveRunNotConfirmed => "SPHINX_E_ENCLAVE_RUN_NOT_CONFIRMED", Contract, Wait, None,
@@ -134,6 +142,10 @@ catalog! {
         "attach exactly ctx.expected yoctoNEAR when first registering; updating a profile needs no deposit";
     AgentNotRegistered => "SPHINX_E_AGENT_NOT_REGISTERED", Contract, FixInput, None,
         "this account has no profile; register_agent creates one";
+    AgentUsernameInvalid => "SPHINX_E_AGENT_USERNAME_INVALID", Contract, FixInput, None,
+        "pick ctx.min to ctx.max lowercase letters, digits, - or _, starting with a letter; names with sphinx in them are kept for the team";
+    AgentUsernameTaken => "SPHINX_E_AGENT_USERNAME_TAKEN", Contract, FixInput, None,
+        "ctx.username belongs to ctx.holder; pick another";
 
     // ---- contract: suite commit and validation ----
     CommitBadHash => "SPHINX_E_COMMIT_BAD_HASH", Contract, FixInput, None,
@@ -265,7 +277,7 @@ catalog! {
 
     // ---- job api ----
     ApiCodeNotFound => "SPHINX_E_API_CODE_NOT_FOUND", Api, FixInput, None,
-        "no stored code has this hash; upload it with POST /v1/code first";
+        "no code you may read has this hash: submitted code is served only to its author and, once paid, the buyer; to store new code, POST /v1/code";
     ApiBadRequest => "SPHINX_E_API_BAD_REQUEST", Api, FixInput, None,
         "the request does not match the API schema; see docs/API.md";
     ApiRelayNotAllowed => "SPHINX_E_API_RELAY_NOT_ALLOWED", Api, FixInput, None,

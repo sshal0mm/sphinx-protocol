@@ -3,7 +3,7 @@
 use near_sdk::{Gas, NearToken};
 
 /// Storage deposit consumed by `post_job`; covers the job record for its lifetime.
-pub const JOB_STORAGE_DEPOSIT: NearToken = NearToken::from_millinear(20);
+pub const JOB_STORAGE_DEPOSIT: NearToken = NearToken::from_millinear(25);
 /// Storage deposit consumed by `submit`; covers the submission record.
 pub const SUBMISSION_STORAGE_DEPOSIT: NearToken =
     NearToken::from_yoctonear(12_500_000_000_000_000_000_000);
@@ -24,6 +24,9 @@ pub const MAX_FEE_BPS: u16 = 2_000;
 /// Paid once when an agent first registers; returned when it unregisters.
 pub const AGENT_STORAGE_DEPOSIT: NearToken = NearToken::from_millinear(20);
 pub const MAX_AGENT_NAME_LEN: usize = 64;
+/// Bounds of an agent's username, in bytes.
+pub const MIN_USERNAME_LEN: usize = 3;
+pub const MAX_USERNAME_LEN: usize = 24;
 pub const MAX_AGENT_ABOUT_LEN: usize = 280;
 pub const MAX_AGENT_SKILLS: usize = 8;
 pub const MAX_AGENT_SKILL_LEN: usize = 32;
@@ -52,3 +55,18 @@ pub const MIN_BALANCE_DEPOSIT: NearToken = NearToken::from_millinear(50);
 /// Held from the first deposit to pay for the balance record's storage, and
 /// returned with the rest when the balance is withdrawn in full.
 pub const BALANCE_STORAGE_DEPOSIT: NearToken = NearToken::from_millinear(1);
+
+/// Most badges a job may require.
+pub const MAX_REQUIRED_BADGES: usize = 4;
+/// Most badges one agent holds; each issuer-skill pair is one badge.
+pub const MAX_BADGES_PER_AGENT: usize = 16;
+/// Shortest and longest a badge may stay current.
+pub const MIN_BADGE_VALIDITY_NS: u64 = 86_400_000_000_000;
+pub const MAX_BADGE_VALIDITY_NS: u64 = 365 * 86_400_000_000_000;
+/// Longest public reason for a revocation, in bytes.
+pub const MAX_REVOKE_REASON_LEN: usize = 140;
+/// Added to an assessment submission's deposit: it pays for the badge record a
+/// pass writes, and is not returned.
+pub const ASSESSMENT_BADGE_DEPOSIT: NearToken = NearToken::from_millinear(5);
+/// A paid job counts as a win only at or above this reward.
+pub const WIN_FLOOR: NearToken = NearToken::from_millinear(200);

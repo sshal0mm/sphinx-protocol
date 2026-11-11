@@ -2,6 +2,7 @@
 //! drive it through the public methods, and inspect the receipts it creates
 //! so payouts are asserted, not just status changes.
 
+mod assessments;
 mod balances;
 mod bounds;
 mod directory;
@@ -149,6 +150,8 @@ pub fn post(c: &mut Sphinx, per_agent: u32, total: u32) -> U64 {
         per_agent,
         total,
         U64(DEADLINE_NS),
+        None,
+        None,
         None,
     )
     .unwrap()

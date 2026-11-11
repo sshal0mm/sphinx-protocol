@@ -115,6 +115,11 @@ pub struct Job {
     pub buyer: AccountId,
     /// A short name for the job, shown wherever it is listed.
     pub title: String,
+    /// Set when the job is a skill assessment: every full pass earns a badge
+    /// instead of a reward (see `assessments.rs`).
+    pub assessment: Option<AssessmentTerms>,
+    /// What an agent must hold to submit to this job, checked at submit.
+    pub requires: Option<Requirements>,
     pub spec_uri: String,
     pub runtime: String,
     pub reward: U128,
@@ -224,6 +229,10 @@ pub struct Config {
     /// From this time the owner may close the contract, once it owes nothing.
     pub retire_after_ns: Option<U64>,
     pub job_storage_deposit: U128,
+    /// Added to an assessment submission's deposit for the badge record.
+    pub assessment_badge_deposit: U128,
+    /// A paid job counts as a win only at or above this reward.
+    pub win_floor: U128,
     pub submission_storage_deposit: U128,
     /// Attached once when an agent first registers, returned when it unregisters.
     pub agent_storage_deposit: U128,
@@ -291,12 +300,94 @@ pub struct AgentStats {
     /// Bonds lost to buyers on failed attempts, in yoctoNEAR. Counted when a
     /// job is paid; bonds held by a job that is refunded come back.
     pub bonds_lost: U128,
+    /// Paid jobs won at or above the win floor (`WIN_FLOOR`): full passes on
+    /// unpaid or tiny jobs do not count.
+    pub wins: u32,
+    /// When the agent last won such a job (0 if never).
+    pub last_win_at_ns: U64,
+    /// Skill assessments passed and failed; kept apart from paid work.
+    pub assessment_passes: u32,
+    pub assessment_fails: u32,
 }
 
 /// A directory entry: profile and record together.
 #[near(serializers = [json])]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AgentView {
+    /// The unique handle the agent chose, if any.
+    pub username: Option<String>,
     pub profile: AgentProfile,
     pub stats: AgentStats,
+    /// Every badge the agent holds, current or not.
+    pub badges: Vec<BadgeView>,
+}
+
+/// A badge's name: the account that issued the assessment and the skill it tests.
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct BadgeKey {
+    pub issuer: AccountId,
+    /// One lowercase tag: letters, digits and hyphens, at most 32 bytes.
+    pub skill: String,
+}
+
+/// What makes a job a skill assessment.
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AssessmentTerms {
+    /// The skill a full pass proves.
+    pub skill: String,
+    /// How long a badge from this assessment stays current.
+    pub validity_ns: U64,
+    /// A badge the agent must already hold to take this assessment (a level below).
+    pub prerequisite: Option<BadgeKey>,
+}
+
+/// What an agent must hold to submit to a job.
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Requirements {
+    /// Current badges, every one required (at most four).
+    pub badges: Vec<BadgeKey>,
+    /// Paid jobs won at or above the win floor.
+    pub min_wins: u32,
+}
+
+/// A badge as stored: earned by the full pass of one assessment submission, graded
+/// in the enclave. No method creates one any other way.
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Badge {
+    pub assessment_job_id: U64,
+    pub sub_id: u32,
+    pub earned_at_ns: U64,
+    pub valid_until_ns: U64,
+    /// Set for good when the issuer revokes it.
+    pub revoked_at_ns: Option<U64>,
+}
+
+/// A badge with its name, and whether it counts now.
+#[near(serializers = [json])]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BadgeView {
+    pub issuer: AccountId,
+    pub skill: String,
+    pub assessment_job_id: U64,
+    pub sub_id: u32,
+    pub earned_at_ns: U64,
+    pub valid_until_ns: U64,
+    pub revoked_at_ns: Option<U64>,
+    /// Not expired, not revoked, and its assessment not revoked.
+    pub current: bool,
+}
+
+/// An agent's public card: its record and its badges.
+#[near(serializers = [json])]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AgentCard {
+    pub account: AccountId,
+    pub username: Option<String>,
+    pub profile: Option<AgentProfile>,
+    pub stats: AgentStats,
+    pub badges: Vec<BadgeView>,
 }

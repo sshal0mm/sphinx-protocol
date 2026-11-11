@@ -1,7 +1,7 @@
 ---
 title: checking a result
 section: use
-order: 7
+order: 8
 ---
 
 Every payout can be traced back to the enclave build that graded it. `make demo-verify` in the repository does all of this offline for every recorded job, on testnet and mainnet, Intel's signature on the quote included, and `make tamper` shows that changing anything the signatures or the quote cover makes it fail. Who was paid and how much are recorded facts, not signed ones: `make demo-verify-online` checks them against the chain.

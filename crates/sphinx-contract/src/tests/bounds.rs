@@ -22,6 +22,8 @@ fn try_post(
         caps.1,
         U64(deadline),
         None,
+        None,
+        None,
     ))
 }
 
@@ -69,6 +71,8 @@ fn post_job_rejects_each_bad_parameter() {
         2,
         U64(DEADLINE_NS),
         None,
+        None,
+        None,
     );
     assert_eq!(code_of(wrong_deposit), Code::JobWrongDeposit);
     ctx(&buyer(), REWARD + JOB_STORAGE_DEPOSIT.as_yoctonear(), START_NS);
@@ -81,6 +85,8 @@ fn post_job_rejects_each_bad_parameter() {
         1,
         2,
         U64(DEADLINE_NS),
+        None,
+        None,
         None,
     );
     assert_eq!(code_of(long_uri), Code::JobUriTooLong);
@@ -101,6 +107,8 @@ fn a_job_needs_a_short_one_line_title() {
             2,
             U64(DEADLINE_NS),
             None,
+            None,
+            None,
         );
         assert_eq!(code_of(r), Code::JobBadTitle);
     }
@@ -114,6 +122,8 @@ fn a_job_needs_a_short_one_line_title() {
         1,
         2,
         U64(DEADLINE_NS),
+        None,
+        None,
         None,
     );
     assert_eq!(c.get_job(ok.unwrap()).unwrap().title, "é".repeat(80));
@@ -256,6 +266,17 @@ fn storage_deposits_cover_maximum_size_records() {
                     .chain(std::iter::once("a".repeat(64).parse().unwrap()))
                     .collect(),
             ),
+            None,
+            // The most a job can require: four badges with the longest names.
+            Some(crate::types::Requirements {
+                badges: (0..crate::constants::MAX_REQUIRED_BADGES)
+                    .map(|i| crate::types::BadgeKey {
+                        issuer: format!("{i}{}", "b".repeat(63)).parse().unwrap(),
+                        skill: format!("{i}{}", "s".repeat(31)),
+                    })
+                    .collect(),
+                min_wins: 10_000,
+            }),
         )
         .unwrap();
     ctx(&acct("a-very-long-buyer-account-name-for-storage-tests"), 0, START_NS + 1);
@@ -268,6 +289,11 @@ fn storage_deposits_cover_maximum_size_records() {
         "job uses {job_bytes} bytes"
     );
 
+    // The largest submission is measured on the same job without its
+    // requirements, which no test agent holds.
+    let mut unrestricted = c.jobs.get(&job.0).cloned().unwrap();
+    unrestricted.requires = None;
+    c.jobs.insert(job.0, unrestricted);
     let v = suite_check_for(&c, job, true);
     ctx(&acct("anyone"), 0, START_NS + 2);
     c.record_suite_check(v.clone(), sign(&grader_key(), &v.signing_message())).unwrap();

@@ -54,6 +54,9 @@ demo-local: ## The grading story offline: no network, no keys
 demo-verify: ## Check every recorded job in deployments/runs offline: registration, signed results, payout (no keys, no network)
 	cargo run -q -p sphinx-cli -- verify deployments/runs/*.json
 
+runs-doc: ## Regenerate docs/RUNS.md (every recorded submission, its result, seconds to settle and its transaction) from deployments/runs
+	scripts/runs-doc.sh
+
 demo-verify-online: ## The same checks, plus re-reading the job, submissions, key register and OutLayer's approved list from chain
 	cargo run -q -p sphinx-cli -- verify --online deployments/runs/*.json
 

@@ -73,6 +73,7 @@ pub fn router<C: Chain>(state: Arc<AppState<C>>) -> Router {
         .route("/v1/jobs/{filter}/after/{from}", get(list_after::<C>))
         .route("/v1/jobs/{uid}/submissions", get(submissions_first::<C>))
         .route("/v1/jobs/{uid}/submissions/after/{from}", get(submissions_after::<C>))
+        .route("/v1/assessments", get(list_assessments::<C>))
         .route("/v1/submissions/recent", get(recent_submissions::<C>))
         .route("/v1/submissions/{uid}", get(submission_by_uid::<C>))
         .route("/v1/agents", get(agents_first::<C>))
@@ -194,9 +195,50 @@ async fn jobs_key<C: Chain>(
     }
     let id = job_for_uid(&s, &key).await?;
     let (job, invited) = tokio::try_join!(s.chain.job(id), s.chain.invites(id))?;
+    let assessment = job.assessment.is_some();
     let mut job = job_json(s.chain.contract(), &job);
     job["invited"] = json!(invited);
+    if assessment {
+        add_assessment_state(&s, id, &mut job).await;
+    }
     Ok(Json(job))
+}
+
+/// `closed` and `revoked` on an assessment's JSON. A failed read leaves them out
+/// rather than failing the page.
+async fn add_assessment_state<C: Chain>(s: &AppState<C>, id: u64, job: &mut Value) {
+    if let Ok((closed, revoked)) = s.chain.assessment_state(id).await {
+        job["closed"] = json!(closed);
+        job["revoked"] = json!(revoked);
+    }
+}
+
+/// `/v1/assessments`: every skill assessment, newest first, with whether it is closed
+/// or revoked. One request, since a page needs them all to pick the assessment
+/// that currently grants a skill.
+async fn list_assessments<C: Chain>(State(s): State<Arc<AppState<C>>>) -> ApiResult<Json<Value>> {
+    let contract = s.chain.contract();
+    let mut assessments = Vec::new();
+    let mut from = 0u64;
+    loop {
+        let page = s.chain.jobs(from, PAGE).await?;
+        assessments.extend(
+            page.iter()
+                .filter(|j| j.assessment.is_some())
+                .map(|j| (j.id_u64(), job_json(contract, j))),
+        );
+        if page.len() < PAGE as usize {
+            break;
+        }
+        from = from.saturating_add(u64::from(PAGE));
+    }
+    assessments.reverse();
+    let mut out = Vec::with_capacity(assessments.len());
+    for (id, mut job) in assessments {
+        add_assessment_state(&s, id, &mut job).await;
+        out.push(job);
+    }
+    Ok(Json(json!({ "assessments": out })))
 }
 
 #[derive(Debug, Serialize)]
@@ -216,8 +258,10 @@ async fn agent_page<C: Chain>(s: &AppState<C>, from: u32) -> ApiResult<Json<Agen
         .map(|a| {
             json!({
                 "uid": sphinx_near::uid::agent_uid(contract, &a.profile.account),
+                "username": a.username,
                 "profile": a.profile,
                 "stats": a.stats,
+                "badges": a.badges,
             })
         })
         .collect();
@@ -235,7 +279,7 @@ async fn agents_after<C: Chain>(
     agent_page(&s, from).await
 }
 
-/// `{ "uid", "account", "profile": … or null, "stats": … }` for an agent
+/// `{ "uid", "account", "profile": … or null, "stats": …, "badges": [] }` for an agent
 /// uid or any NEAR account: the record is kept for every account that has
 /// submitted, registered or not.
 async fn agent_by_account<C: Chain>(
@@ -243,13 +287,40 @@ async fn agent_by_account<C: Chain>(
     Path(agent): Path<String>,
 ) -> ApiResult<Json<Value>> {
     let account = agent_account(&s, &agent).await?;
-    let (profile, stats) =
-        tokio::try_join!(s.chain.agent(&account), s.chain.agent_stats(&account))?;
+    let (profile, stats, badges) = tokio::join!(
+        s.chain.agent(&account),
+        s.chain.agent_stats(&account),
+        s.chain.badges(&account)
+    );
+    // A contract without assessments has no badge view; the record still shows.
+    // Each badge carries the uids of the assessment and the passing submission,
+    // so a page can link straight to its enclave proof.
+    let contract = s.chain.contract();
+    let badges: Vec<Value> = badges
+        .unwrap_or_default()
+        .into_iter()
+        .map(|b| {
+            let job: u64 = b.assessment_job_id.parse().unwrap_or_default();
+            let mut v = serde_json::to_value(&b).unwrap_or(Value::Null);
+            if let Value::Object(m) = &mut v {
+                m.insert("assessment_uid".into(), json!(sphinx_near::uid::job_uid(contract, job)));
+                m.insert(
+                    "sub_uid".into(),
+                    json!(sphinx_near::uid::submission_uid(contract, job, b.sub_id)),
+                );
+            }
+            v
+        })
+        .collect();
+    let profile = profile?;
+    let username = profile.as_ref().and_then(|v| v.username.clone());
     Ok(Json(json!({
         "uid": sphinx_near::uid::agent_uid(s.chain.contract(), &account),
         "account": account,
+        "username": username,
         "profile": profile.map(|v| v.profile),
-        "stats": stats,
+        "stats": stats?,
+        "badges": badges,
     })))
 }
 
@@ -261,6 +332,14 @@ async fn agent_account<C: Chain>(s: &AppState<C>, key: &str) -> ApiResult<String
             _ => Err(not_found(&format!("agent {key}"))),
         };
     }
+    // A key without a dot may be a username; one nobody holds is read as
+    // an account id. A contract without usernames answers with an error,
+    // which falls through the same way.
+    if is_username_shaped(key) {
+        if let Ok(Some(account)) = s.chain.username_owner(key).await {
+            return Ok(account);
+        }
+    }
     let parsed: sphinx_near::near_api::types::AccountId = key.parse().map_err(|_| {
         ApiError(SphinxError::new(
             Code::ApiBadRequest,
@@ -268,6 +347,15 @@ async fn agent_account<C: Chain>(s: &AppState<C>, key: &str) -> ApiResult<String
         ))
     })?;
     Ok(parsed.to_string())
+}
+
+/// 3 to 24 lowercase letters, digits, `-` and `_`, starting with a letter.
+fn is_username_shaped(key: &str) -> bool {
+    (3..=24).contains(&key.len())
+        && key.bytes().next().is_some_and(|b| b.is_ascii_lowercase())
+        && key
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'_')
 }
 
 /// Whether a job can no longer change: finished, with nothing waiting for a score.

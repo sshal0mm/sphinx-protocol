@@ -20,6 +20,7 @@ fn register(
         vec!["javascript".into()],
         U128(NEAR / 10),
         String::new(),
+        None,
     )
 }
 
@@ -41,8 +42,15 @@ fn agents_register_update_and_leave() {
         Code::AgentWrongDeposit
     );
     ctx(&a, 0, START_NS + 5);
-    c.register_agent("Ada 2".into(), String::new(), vec![], U128(0), "https://ada.example".into())
-        .unwrap();
+    c.register_agent(
+        "Ada 2".into(),
+        String::new(),
+        vec![],
+        U128(0),
+        "https://ada.example".into(),
+        None,
+    )
+    .unwrap();
     let updated = c.get_agent(a.clone()).unwrap().profile;
     assert_eq!(
         (updated.name.as_str(), updated.registered_at_ns),
@@ -78,7 +86,7 @@ fn profile_fields_are_bounded() {
     ];
     for (name, about, skills, contact, field) in cases {
         ctx(&a, DEPOSIT, START_NS);
-        let err = c.register_agent(name, about, skills, U128(0), contact).unwrap_err().0;
+        let err = c.register_agent(name, about, skills, U128(0), contact, None).unwrap_err().0;
         assert_eq!(
             (err.code(), err.context()["field"].as_str()),
             (Code::AgentProfileInvalid, field)
@@ -104,7 +112,11 @@ fn records_follow_scored_results_only() {
             fails: 1,
             expired: 0,
             earned: U128(REWARD - fee),
-            bonds_lost: U128(BOND)
+            bonds_lost: U128(BOND),
+            wins: 1,
+            last_win_at_ns: U64(START_NS + 13),
+            assessment_passes: 0,
+            assessment_fails: 0,
         }
     );
 
@@ -131,6 +143,8 @@ fn open_invite_job(c: &mut Sphinx, invited: Vec<AccountId>) -> U64 {
             10,
             U64(DEADLINE_NS),
             Some(invited),
+            None,
+            None,
         )
         .unwrap();
     ctx(&buyer(), 0, START_NS + 1);
@@ -180,6 +194,8 @@ fn invites_are_capped() {
             2,
             U64(DEADLINE_NS),
             Some(many),
+            None,
+            None,
         )
         .unwrap_err()
         .0;
@@ -199,6 +215,7 @@ fn agent_deposit_covers_the_largest_profile() {
         vec!["s".repeat(32); MAX_AGENT_SKILLS],
         U128(u128::MAX),
         "c".repeat(256),
+        Some("u".repeat(24)),
     )
     .unwrap();
     c.flush();
@@ -213,10 +230,62 @@ fn profile_limits_are_bytes_so_wide_characters_cannot_outgrow_the_deposit() {
     ctx(&acct("emoji"), DEPOSIT, START_NS);
     // 64 four-byte characters are 256 bytes: over the 64-byte name limit.
     let err = c
-        .register_agent("😀".repeat(64), String::new(), vec![], U128(0), String::new())
+        .register_agent("😀".repeat(64), String::new(), vec![], U128(0), String::new(), None)
         .unwrap_err()
         .0;
     assert_eq!(err.code(), Code::AgentProfileInvalid);
     ctx(&acct("emoji"), DEPOSIT, START_NS);
-    c.register_agent("😀".repeat(16), String::new(), vec![], U128(0), String::new()).unwrap();
+    c.register_agent("😀".repeat(16), String::new(), vec![], U128(0), String::new(), None).unwrap();
+}
+
+fn named(
+    c: &mut Sphinx,
+    who: &AccountId,
+    username: Option<&str>,
+    deposit: u128,
+) -> Result<(), ContractError> {
+    ctx(who, deposit, START_NS);
+    c.register_agent(
+        "Agent".into(),
+        String::new(),
+        vec![],
+        U128(0),
+        String::new(),
+        username.map(str::to_owned),
+    )
+}
+
+#[test]
+fn usernames_are_unique_checked_and_released() {
+    let mut c = contract();
+    let (a, b) = (acct("user-a"), acct("user-b"));
+    for bad in ["ab", "Ada", "1ada", "ada.near", "a".repeat(25).as_str(), "ada smith"] {
+        assert_eq!(
+            code_of(named(&mut c, &a, Some(bad), DEPOSIT)),
+            Code::AgentUsernameInvalid,
+            "{bad}"
+        );
+    }
+    // A name with "sphinx" in it is only for the operator's accounts.
+    assert_eq!(code_of(named(&mut c, &a, Some("sphinx-bot"), DEPOSIT)), Code::AgentUsernameInvalid);
+    named(&mut c, &a, Some("ada_solver"), DEPOSIT).unwrap();
+    assert_eq!(c.get_agent(a.clone()).unwrap().username.as_deref(), Some("ada_solver"));
+    assert_eq!(c.get_agent_by_username("ada_solver".into()).unwrap().profile.account, a);
+    assert_eq!(code_of(named(&mut c, &b, Some("ada_solver"), DEPOSIT)), Code::AgentUsernameTaken);
+
+    // Omitted keeps it; a new one frees the old; "" releases it.
+    named(&mut c, &a, None, 0).unwrap();
+    assert_eq!(c.get_agent(a.clone()).unwrap().username.as_deref(), Some("ada_solver"));
+    named(&mut c, &a, Some("ada"), 0).unwrap();
+    assert!(c.get_agent_by_username("ada_solver".into()).is_none());
+    named(&mut c, &b, Some("ada_solver"), DEPOSIT).unwrap();
+    named(&mut c, &a, Some(""), 0).unwrap();
+    assert!(c.get_agent(a.clone()).unwrap().username.is_none());
+    assert!(c.get_agent_by_username("ada".into()).is_none());
+
+    // Leaving the directory frees the name for anyone.
+    ctx(&b, 0, START_NS + 1);
+    c.unregister_agent().unwrap();
+    named(&mut c, &a, Some("ada_solver"), 0).unwrap();
+    assert_eq!(c.get_agent_by_username("ada_solver".into()).unwrap().profile.account, a);
 }

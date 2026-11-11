@@ -7,7 +7,7 @@
 //! the one configured account, within its spending cap.
 //!
 //! Environment:
-//! - `SPHINX_CONTRACT` (default `escrow.sphinx999.testnet`)
+//! - `SPHINX_CONTRACT` (default `escrow3.sphinx999.testnet`)
 //! - `SPHINX_API` (optional): job API base URL for code storage and gasless relaying
 //! - `SPHINX_ACCOUNT` + `SPHINX_ACCOUNT_KEY` (optional, `ed25519:...`): needed by
 //!   tools that sign (submit, reclaim, post a job, delete a suite). The key never leaves this process.
@@ -137,7 +137,7 @@ fn connect_dir() -> Option<String> {
 /// their limited keys in `dir`.
 async fn serve_connect(dir: String, addr: &str) -> std::process::ExitCode {
     let contract =
-        std::env::var("SPHINX_CONTRACT").unwrap_or_else(|_| "escrow.sphinx999.testnet".to_owned());
+        std::env::var("SPHINX_CONTRACT").unwrap_or_else(|_| "escrow3.sphinx999.testnet".to_owned());
     let Ok(contract) = contract.parse() else {
         eprintln!("error[SPHINX_E_CLI_CONFIG_MALFORMED]: SPHINX_CONTRACT is not an account id");
         return std::process::ExitCode::from(78);
@@ -202,7 +202,7 @@ async fn main() -> std::process::ExitCode {
         }
     }
     let contract =
-        std::env::var("SPHINX_CONTRACT").unwrap_or_else(|_| "escrow.sphinx999.testnet".to_owned());
+        std::env::var("SPHINX_CONTRACT").unwrap_or_else(|_| "escrow3.sphinx999.testnet".to_owned());
     let Ok(contract) = contract.parse() else {
         eprintln!("error[SPHINX_E_CLI_CONFIG_MALFORMED]: SPHINX_CONTRACT is not an account id");
         return std::process::ExitCode::from(78);

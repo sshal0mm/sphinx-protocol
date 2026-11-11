@@ -13,7 +13,7 @@ use near_sdk::json_types::{U128, U64};
 use near_sdk::{env, near, AccountId, IntoStorageKey};
 use sphinx_protocol::{Code, SphinxError};
 
-use crate::constants::{BALANCE_STORAGE_DEPOSIT, MIN_BALANCE_DEPOSIT, SUBMISSION_STORAGE_DEPOSIT};
+use crate::constants::{BALANCE_STORAGE_DEPOSIT, MIN_BALANCE_DEPOSIT};
 use crate::errors::{ensure, Result};
 use crate::events::SphinxEvent;
 use crate::types::SubmitReceipt;
@@ -137,8 +137,7 @@ impl Sphinx {
         code_hash: String,
     ) -> Result<SubmitReceipt> {
         let agent = env::predecessor_account_id();
-        let bond = self.job(job_id.0)?.bond.0;
-        let needed = bond.saturating_add(SUBMISSION_STORAGE_DEPOSIT.as_yoctonear());
+        let needed = Self::submit_deposit(&self.job(job_id.0)?);
         let balance = read(&agent).unwrap_or(0);
         ensure!(
             balance >= needed,

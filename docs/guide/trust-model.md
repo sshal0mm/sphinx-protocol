@@ -8,7 +8,7 @@ Each part of Sphinx is trusted for as little as possible.
 
 | Part | Does | Cannot |
 |---|---|---|
-| the contract | holds rewards, bonds and prepaid balances, pays on a score signed by the key frozen into the job, keeps records | pay anyone without a valid signed score, as deployed (the owner's full-access key can replace the code) |
+| the contract | holds rewards, bonds and prepaid balances, pays on a score signed by the key frozen into the job, keeps records, writes skill badges and checks a job's required badges and wins before a bond moves | pay anyone without a valid signed score or write a badge without a full pass on an assessment, as deployed (the owner's full-access key can replace the code) |
 | the grader | runs the hidden tests on the exact committed code and signs the pass count | reveal which tests failed, or sign for another build |
 | the relayer | starts enclave runs for pending submissions, chooses which are graded and when, posts results | change or forge a score; if it delays, bonds and rewards are returned, though a withheld score can change who wins |
 | the api | serves job data, stores code by hash (its operator can read it), pays gas for signed calls that lock no NEAR | move funds or alter code; everything is checked by hash |

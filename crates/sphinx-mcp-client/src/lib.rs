@@ -17,11 +17,13 @@ pub struct ToolFailure {
     /// The `SPHINX_E_*` code, when the failure came from Sphinx.
     pub code: Option<String>,
     pub message: String,
+    /// The whole error report, hint and context included, when there is one.
+    pub report: Option<Value>,
 }
 
 impl ToolFailure {
     pub fn new(message: impl Into<String>) -> Self {
-        Self { code: None, message: message.into() }
+        Self { code: None, message: message.into(), report: None }
     }
 }
 
@@ -72,10 +74,9 @@ impl McpClient {
     /// When the server cannot be reached or does not complete the handshake.
     pub async fn connect(url: &str) -> Result<Self, ToolFailure> {
         let transport = rmcp::transport::StreamableHttpClientTransport::from_uri(url.to_owned());
-        let service =
-            ().serve(transport)
-                .await
-                .map_err(|e| ToolFailure::new(format!("MCP handshake with the connector failed: {e}")))?;
+        let service = ().serve(transport).await.map_err(|e| {
+            ToolFailure::new(format!("MCP handshake with the connector failed: {e}"))
+        })?;
         Ok(Self { service })
     }
 
@@ -117,8 +118,11 @@ impl McpClient {
 
 /// Reads a tool's `{ok, result | error}` reply.
 fn parse_reply(tool: &str, text: &str) -> Result<Value, ToolFailure> {
-    let reply: Value = serde_json::from_str(text)
-        .map_err(|e| ToolFailure::new(format!("{tool} reply is not JSON: {e}")))?;
+    let reply: Value = serde_json::from_str(text).map_err(|_| {
+        // Not Sphinx's JSON reply: a refusal from the MCP layer itself, such
+        // as arguments that do not fit the tool. Pass its text on as is.
+        ToolFailure::new(format!("{tool}: {}", text.trim()))
+    })?;
     if reply["ok"] == true {
         return Ok(reply["result"].clone());
     }
@@ -126,6 +130,7 @@ fn parse_reply(tool: &str, text: &str) -> Result<Value, ToolFailure> {
     Err(ToolFailure {
         code: err["code"].as_str().map(str::to_owned),
         message: err["message"].as_str().unwrap_or("the tool failed").to_owned(),
+        report: err.is_object().then(|| err.clone()),
     })
 }
 

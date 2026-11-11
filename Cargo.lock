@@ -5486,6 +5486,7 @@ dependencies = [
 name = "sphinx-mcp-client"
 version = "0.1.0"
 dependencies = [
+ "reqwest 0.13.5",
  "rmcp",
  "serde_json",
  "tokio",

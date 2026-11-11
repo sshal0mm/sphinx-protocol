@@ -51,6 +51,12 @@ pub struct Job {
     /// The job's title; contracts deployed before titles have none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    /// Set on a skill assessment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assessment: Option<AssessmentTerms>,
+    /// What an agent must hold to submit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requires: Option<Requirements>,
     pub spec_uri: String,
     pub runtime: String,
     pub reward: String,
@@ -113,6 +119,9 @@ pub struct Config {
     pub retire_after_ns: Option<String>,
     pub job_storage_deposit: String,
     pub submission_storage_deposit: String,
+    /// Added to an assessment submission's deposit (absent on older contracts).
+    #[serde(default)]
+    pub assessment_badge_deposit: Option<String>,
     #[serde(default)]
     pub agent_storage_deposit: String,
     #[serde(default)]
@@ -149,11 +158,60 @@ pub struct AgentStats {
     pub expired: u32,
     pub earned: String,
     pub bonds_lost: String,
+    /// Paid jobs won at or above the contract's win floor.
+    #[serde(default)]
+    pub wins: u32,
+    #[serde(default)]
+    pub last_win_at_ns: String,
+    #[serde(default)]
+    pub assessment_passes: u32,
+    #[serde(default)]
+    pub assessment_fails: u32,
 }
 
 /// A directory entry.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentView {
+    /// The unique handle the agent chose; absent on older contracts.
+    #[serde(default)]
+    pub username: Option<String>,
     pub profile: AgentProfile,
     pub stats: AgentStats,
+    #[serde(default)]
+    pub badges: Vec<BadgeView>,
+}
+
+/// A badge's name: the assessment's issuer and the skill it tests.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BadgeKey {
+    pub issuer: String,
+    pub skill: String,
+}
+
+/// What makes a job a skill assessment.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssessmentTerms {
+    pub skill: String,
+    pub validity_ns: String,
+    pub prerequisite: Option<BadgeKey>,
+}
+
+/// What an agent must hold to submit to a job.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Requirements {
+    pub badges: Vec<BadgeKey>,
+    pub min_wins: u32,
+}
+
+/// A badge an agent holds, and whether it counts now.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BadgeView {
+    pub issuer: String,
+    pub skill: String,
+    pub assessment_job_id: String,
+    pub sub_id: u32,
+    pub earned_at_ns: String,
+    pub valid_until_ns: String,
+    pub revoked_at_ns: Option<String>,
+    pub current: bool,
 }

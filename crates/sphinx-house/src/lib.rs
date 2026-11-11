@@ -334,10 +334,17 @@ impl<M: Model + Send + Sync + 'static> House<M> {
             c.roll(Instant::now());
             let mine = c.drafts.get(client).copied().unwrap_or(0);
             if mine >= self.caps.drafts_per_visitor {
+                let left =
+                    c.since.map_or(DAY, |s| DAY.saturating_sub(Instant::now().duration_since(s)));
+                let hours = left.as_secs().div_ceil(3600).max(1);
                 return Err(Refusal::new(
                     StatusCode::TOO_MANY_REQUESTS,
                     "visitor_limit",
-                    "you have used today's free drafts; come back tomorrow",
+                    format!(
+                        "you have used today's {} free drafts; drafting opens again within {hours} hour{}",
+                        self.caps.drafts_per_visitor,
+                        if hours == 1 { "" } else { "s" }
+                    ),
                 ));
             }
             if c.drafts_total >= self.caps.drafts_per_day {
@@ -462,9 +469,25 @@ impl<M: Model + Send + Sync + 'static> House<M> {
                     });
                 }
                 Err(e) => {
+                    // A first draft that fails gives the visitor's free draft
+                    // back: a failure should not cost them a try.
+                    if let Ok(r) = house.get(&id) {
+                        if r.change.is_none() {
+                            if let Ok(mut c) = house.counters.lock() {
+                                if let Some(n) = c.drafts.get_mut(&r.client) {
+                                    *n = n.saturating_sub(1);
+                                }
+                                c.drafts_total = c.drafts_total.saturating_sub(1);
+                            }
+                        }
+                    }
+                    eprintln!("draft {id} failed: {}", e.message());
                     house.update(&id, |r| {
                         r.stage = Stage::Failed;
-                        r.error = Some(format!("the draft could not be finished: {}", e.message()));
+                        r.error = Some(
+                            "the draft could not be finished this time; nothing was charged and this try does not count, so describe the job again or reword it"
+                                .to_owned(),
+                        );
                     });
                 }
             }
@@ -686,6 +709,14 @@ impl<M: Model + Send + Sync + 'static> House<M> {
     /// The transactions are not what was asked for, or did not succeed.
     pub async fn paid(&self, id: &str, post_tx: &str, fee_tx: &str) -> Result<Value, Refusal> {
         let record = self.get(id)?;
+        // The same payment reported again, say after a lost response: answer
+        // with the same next step instead of an error.
+        if let (Stage::Storing, Some(job_id)) = (record.stage, record.job_id) {
+            if record.txs.iter().any(|t| t == post_tx) && record.txs.iter().any(|t| t == fee_tx) {
+                let config = self.config().await?;
+                return self.store_transactions(&record, job_id, &config).await;
+            }
+        }
         if record.stage != Stage::Paying {
             return Err(wrong_stage("nothing is waiting for payment"));
         }

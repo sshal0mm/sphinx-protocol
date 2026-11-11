@@ -35,20 +35,57 @@ pub struct PostJob {
     pub spec: Option<String>,
     /// Reward paid to the first submission that passes every test, in NEAR as a decimal string, e.g. "0.5".
     pub reward_near: String,
-    /// Bond each submission locks, in NEAR as a decimal string, e.g. "0.01". Forfeited to you when a submission fails.
+    /// Bond each submission locks, in NEAR as a decimal string, e.g. "0.01". A failed bond is held, then kept by the contract if another submission passes (never paid to you) or returned to its agent if nobody does.
     pub bond_near: String,
     /// Graded attempts each agent may make.
     pub max_subs_per_agent: u32,
     /// Submissions the job accepts in total.
     pub max_subs_total: u32,
-    /// Hours until submissions close.
-    pub deadline_hours: u32,
+    /// Hours until submissions close, from 0.25 (15 minutes) to 720 (30 days); fractions allowed.
+    pub deadline_hours: f64,
     /// Resume a job this tool posted earlier whose later steps did not finish. The suite and reference must be the same.
     #[serde(default, deserialize_with = "optional_job_id")]
     pub job_id: Option<u64>,
     /// Hire directly: only these agent accounts may submit (at most 8). Omit to open the job to every agent.
     #[serde(default)]
     pub invited: Option<Vec<String>>,
+    /// Make this a skill assessment: every agent that passes all hidden tests earns a badge for `skill` from you; it pays no reward (reward_near "0"), allows one attempt per agent (max_subs_per_agent 1), and a failed attempt forfeits its bond.
+    #[serde(default)]
+    pub assessment: Option<AssessmentInput>,
+    /// Only agents holding these current badges, and at least `min_wins` paid wins, may submit.
+    #[serde(default)]
+    pub requires: Option<RequiresInput>,
+}
+
+/// A skill assessment's terms.
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct AssessmentInput {
+    /// One lowercase tag of letters, digits and hyphens, e.g. "data-parsing".
+    pub skill: String,
+    /// How many days a badge from this assessment stays current (1 to 365).
+    pub validity_days: u32,
+    /// A badge the agent must already hold to take this assessment (a level below).
+    #[serde(default)]
+    pub prerequisite: Option<BadgeInput>,
+}
+
+/// A badge's name.
+#[derive(Debug, Clone, Deserialize, JsonSchema, serde::Serialize)]
+pub struct BadgeInput {
+    /// The account that issued the assessment.
+    pub issuer: String,
+    pub skill: String,
+}
+
+/// What an agent must hold to submit.
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct RequiresInput {
+    /// Current badges, every one required (at most four).
+    #[serde(default)]
+    pub badges: Vec<BadgeInput>,
+    /// Paid wins at or above the contract's win floor.
+    #[serde(default)]
+    pub min_wins: u32,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -272,10 +309,11 @@ impl SphinxMcp {
                 ))
             }
         };
+        deadline_span_ns(p.deadline_hours)?;
         let config: Config = self.settings.escrow.view("get_config", json!({})).await?;
         let reward = sphinx_near::parse_near(&p.reward_near)?;
         let bond = sphinx_near::parse_near(&p.bond_near)?;
-        let deadline_ns = now_ns()?.saturating_add(u64::from(p.deadline_hours) * NS_PER_HOUR);
+        let deadline_ns = now_ns()?.saturating_add(deadline_span_ns(p.deadline_hours)?);
         let runtime = serde_json::from_str::<Value>(&p.suite)
             .ok()
             .and_then(|v| v["runtime"].as_str().map(str::to_owned))
@@ -306,6 +344,15 @@ impl SphinxMcp {
                     "max_subs_total": p.max_subs_total,
                     "deadline_ns": deadline_ns.to_string(),
                     "invited": p.invited,
+                    "assessment": p.assessment.as_ref().map(|e| json!({
+                        "skill": e.skill,
+                        "validity_ns": (u64::from(e.validity_days) * 86_400_000_000_000).to_string(),
+                        "prerequisite": e.prerequisite,
+                    })),
+                    "requires": p.requires.as_ref().map(|r| json!({
+                        "badges": r.badges,
+                        "min_wins": r.min_wins,
+                    })),
                 }),
                 deposit,
             )
@@ -333,4 +380,22 @@ impl SphinxMcp {
 
 fn readable_by(t: &SuiteTarget) -> Value {
     json!({ "grader_wasm_sha256": t.wasm_sha256, "caller": t.caller, "attestation": t.attestation_ref })
+}
+
+/// `hours` as nanoseconds, refused outside 15 minutes to 30 days.
+pub(crate) fn deadline_span_ns(hours: f64) -> Result<u64, SphinxError> {
+    if !hours.is_finite() || !(0.25..=720.0).contains(&hours) {
+        return Err(SphinxError::new(
+            Code::CliUsage,
+            format!("deadline_hours is {hours}; give 0.25 (15 minutes) to 720 (30 days)"),
+        )
+        .ctx("field", "deadline_hours"));
+    }
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss,
+        reason = "checked range"
+    )]
+    Ok((hours * NS_PER_HOUR as f64).round() as u64)
 }

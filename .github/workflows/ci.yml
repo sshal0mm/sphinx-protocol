@@ -29,6 +29,8 @@ jobs:
       - run: cargo test -p sphinx-contract --locked
       - name: Error docs match the catalog
         run: cargo run -q -p sphinx-protocol --bin gen-error-docs | diff -u docs/ERRORS.md -
+      - name: docs/RUNS.md matches the recorded runs
+        run: scripts/runs-doc.sh --check
 
   enclave-limits:
     name: grader under enclave instruction limit

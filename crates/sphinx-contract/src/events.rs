@@ -43,6 +43,32 @@ pub enum SphinxEvent {
     RunRefused { job_id: U64, sub_id: Option<u32>, reason: String },
     #[event_version("1.0.0")]
     MeasurementsSynced { images: u32 },
+    /// A full pass on a skill assessment wrote a badge.
+    #[event_version("1.0.0")]
+    BadgeEarned {
+        agent: AccountId,
+        issuer: AccountId,
+        skill: String,
+        job_id: U64,
+        sub_id: u32,
+        valid_until_ns: U64,
+    },
+    /// An assessment attempt failed: its bond is kept by the contract.
+    #[event_version("1.0.0")]
+    AssessmentFailed {
+        job_id: U64,
+        sub_id: u32,
+        agent: AccountId,
+        passed: u32,
+        total: u32,
+        bond_kept: U128,
+    },
+    #[event_version("1.0.0")]
+    AssessmentClosed { job_id: U64 },
+    #[event_version("1.0.0")]
+    AssessmentRevoked { job_id: U64, reason: String },
+    #[event_version("1.0.0")]
+    BadgeRevoked { agent: AccountId, issuer: AccountId, skill: String, reason: String },
     #[event_version("1.0.0")]
     Retired { owner: AccountId, balance: U128 },
     #[event_version("1.0.0")]
@@ -113,6 +139,8 @@ pub enum SphinxEvent {
     AgentRegistered { agent: AccountId, updated: bool },
     #[event_version("1.0.0")]
     AgentRemoved { agent: AccountId },
+    #[event_version("1.0.0")]
+    AgentUsername { agent: AccountId, username: Option<String> },
     #[event_version("1.0.0")]
     AgentsInvited { job_id: U64, agents: Vec<AccountId> },
 }

@@ -372,7 +372,6 @@ pub async fn online_checks(bundle: &Value) -> Result<Report, String> {
     let (job, _) =
         view_call(&rpc, contract, "get_job", &serde_json::json!({ "job_id": job_id }), None)
             .await?;
-    r.push(job == bundle["job"], format!("job {job_id} on {contract} is as recorded"));
     let (subs, _) = view_call(
         &rpc,
         contract,
@@ -381,7 +380,25 @@ pub async fn online_checks(bundle: &Value) -> Result<Report, String> {
         None,
     )
     .await?;
-    r.push(subs == bundle["submissions"], "its submissions on chain are as recorded");
+    if bundle["job"]["assessment"].is_object() {
+        // An assessment stays open, so later attempts change its counts: compare
+        // what cannot change, and the recorded attempts.
+        let fixed = ["buyer", "reward", "bond", "assessment", "commit", "runtime", "spec_uri"];
+        r.push(
+            fixed.iter().all(|k| job[k] == bundle["job"][k]),
+            format!("assessment {job_id} on {contract} has the recorded terms and tests"),
+        );
+        let live = subs.as_array().cloned().unwrap_or_default();
+        let recorded = bundle["submissions"].as_array().cloned().unwrap_or_default();
+        r.push(
+            recorded.iter().all(|x| live.contains(x)),
+            "its recorded attempts are on chain as recorded",
+        );
+        check_badges(&mut r, &rpc, contract, job_id, &recorded).await?;
+    } else {
+        r.push(job == bundle["job"], format!("job {job_id} on {contract} is as recorded"));
+        r.push(subs == bundle["submissions"], "its submissions on chain are as recorded");
+    }
     let (history, _) =
         view_call(&rpc, contract, "get_grader_history", &serde_json::json!({}), None).await?;
     let live = history.as_array().cloned().unwrap_or_default();
@@ -424,6 +441,36 @@ pub async fn online_checks(bundle: &Value) -> Result<Report, String> {
         ),
     );
     Ok(r)
+}
+
+/// Every recorded pass of an assessment has its badge on chain, pointing back at
+/// that submission; a revoked badge is reported as revoked.
+async fn check_badges(
+    r: &mut Report,
+    rpc: &str,
+    contract: &str,
+    job_id: &str,
+    recorded: &[Value],
+) -> Result<(), String> {
+    for sub in recorded.iter().filter(|x| s(x, &["status"]) == "Passed") {
+        let agent = s(sub, &["agent"]);
+        let (badges, _) =
+            view_call(rpc, contract, "get_badges", &serde_json::json!({ "account": agent }), None)
+                .await?;
+        let found = badges.as_array().and_then(|list| {
+            list.iter()
+                .find(|b| s(b, &["assessment_job_id"]) == job_id && b["sub_id"] == sub["sub_id"])
+                .cloned()
+        });
+        let state = match &found {
+            Some(b) if !b["revoked_at_ns"].is_null() => "revoked by its issuer since",
+            Some(b) if b["current"] == true => "current",
+            Some(_) => "expired",
+            None => "",
+        };
+        r.push(found.is_some(), format!("{agent} holds the badge this pass wrote ({state})"));
+    }
+    Ok(())
 }
 
 /// The SHA-256 of the code `account` runs now, as lowercase hex (the chain
@@ -640,7 +687,24 @@ fn check_payout(r: &mut Report, bundle: &Value, job: &Value, passes: &[u64]) {
     let empty = Vec::new();
     let subs = bundle["submissions"].as_array().unwrap_or(&empty);
     let first_pass = passes.iter().min().copied();
-    if s(job, &["status"]) == "Paid" {
+    if job["assessment"].is_object() {
+        // A skill assessment pays nothing: each full pass writes a badge instead.
+        let marked: Vec<u64> = subs
+            .iter()
+            .filter(|x| s(x, &["status"]) == "Passed")
+            .filter_map(|x| x["sub_id"].as_u64())
+            .collect();
+        let mut signed = passes.to_vec();
+        signed.sort_unstable();
+        r.push(
+            s(job, &["reward"]) == "0" && marked == signed,
+            format!(
+                "skill assessment ({}): no reward, and the {} signed full pass(es) are exactly the submissions recorded as Passed, each of which wrote a badge (`--online` reads the badges)",
+                s(&job["assessment"], &["skill"]),
+                signed.len()
+            ),
+        );
+    } else if s(job, &["status"]) == "Paid" {
         let winner = job["winning_sub_id"].as_u64();
         let agent = first_pass
             .and_then(|id| subs.iter().find(|x| x["sub_id"].as_u64() == Some(id)))

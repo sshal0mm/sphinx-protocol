@@ -4,7 +4,7 @@
 use serde_json::{json, Value};
 use sphinx_near::near_api::types::transaction::actions::AccessKey;
 use sphinx_near::near_api::types::transaction::delegate_action::SignedDelegateAction;
-use sphinx_near::views::{AgentStats, AgentView, Config, Job, Submission};
+use sphinx_near::views::{AgentStats, AgentView, BadgeView, Config, Job, Submission};
 use sphinx_near::Escrow;
 use sphinx_protocol::{Code, SphinxError};
 use std::future::Future;
@@ -64,6 +64,30 @@ pub trait Chain: Send + Sync + 'static {
         &self,
         account: &str,
     ) -> impl Future<Output = Result<AgentStats, SphinxError>> + Send;
+    /// The skill badges an account holds, current or not; empty on a
+    /// contract that has no assessments.
+    fn badges(
+        &self,
+        _account: &str,
+    ) -> impl Future<Output = Result<Vec<BadgeView>, SphinxError>> + Send {
+        async { Ok(Vec::new()) }
+    }
+    /// The account holding `username`, if any; always `None` on a contract
+    /// without usernames.
+    fn username_owner(
+        &self,
+        _username: &str,
+    ) -> impl Future<Output = Result<Option<String>, SphinxError>> + Send {
+        async { Ok(None) }
+    }
+    /// Whether an assessment takes no new submissions, and whether its badges
+    /// are revoked.
+    fn assessment_state(
+        &self,
+        _job: u64,
+    ) -> impl Future<Output = Result<(bool, bool), SphinxError>> + Send {
+        async { Ok((false, false)) }
+    }
     /// The agents a direct-hire job is open to; empty for an open job.
     fn invites(&self, job: u64) -> impl Future<Output = Result<Vec<String>, SphinxError>> + Send;
     /// The delegate action sender's access key for its public key, and the
@@ -171,6 +195,20 @@ impl Chain for Escrow {
 
     async fn agent_stats(&self, account: &str) -> Result<AgentStats, SphinxError> {
         self.view("get_agent_stats", json!({ "account": account })).await
+    }
+
+    async fn badges(&self, account: &str) -> Result<Vec<BadgeView>, SphinxError> {
+        self.view("get_badges", json!({ "account": account })).await
+    }
+
+    async fn username_owner(&self, username: &str) -> Result<Option<String>, SphinxError> {
+        let v: Option<AgentView> =
+            self.view("get_agent_by_username", json!({ "username": username })).await?;
+        Ok(v.map(|a| a.profile.account))
+    }
+
+    async fn assessment_state(&self, job: u64) -> Result<(bool, bool), SphinxError> {
+        self.view("get_assessment_state", json!({ "job_id": job.to_string() })).await
     }
 
     async fn invites(&self, job: u64) -> Result<Vec<String>, SphinxError> {

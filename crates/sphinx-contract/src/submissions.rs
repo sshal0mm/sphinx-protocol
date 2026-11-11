@@ -4,7 +4,7 @@ use near_sdk::json_types::{U128, U64};
 use near_sdk::{env, near, AccountId};
 use sphinx_protocol::{Code, Hash32, Score, SphinxError};
 
-use crate::constants::{MAX_URI_LEN, SUBMISSION_STORAGE_DEPOSIT};
+use crate::constants::{MAX_URI_LEN, SUBMISSION_STORAGE_DEPOSIT, WIN_FLOOR};
 use crate::errors::{self, ensure, Result};
 use crate::events::SphinxEvent;
 use crate::types::{AgentUse, Job, JobStatus, SubStatus, Submission, SubmitReceipt};
@@ -158,6 +158,12 @@ impl Sphinx {
         usage.graded = usage.graded.saturating_add(1);
         self.results_recorded = self.results_recorded.saturating_add(1);
 
+        if job.assessment.is_some() {
+            self.agent_use.insert(usage_key, usage);
+            self.settle_assessment_attempt(&mut job, sub, &score, now)?;
+            self.jobs.insert(job_id, job);
+            return Ok(());
+        }
         if score.is_pass() {
             sub.status = SubStatus::Passed;
             self.passes = self.passes.saturating_add(1);
@@ -319,7 +325,7 @@ impl Sphinx {
                 SphinxError::new(
                     Code::SubmitNotInvited,
                     format!(
-                        "job {} is open only to the {} agents its buyer invited",
+                        "job {} is open only to the agents its buyer invited ({} of them)",
                         job_id.0,
                         invited.len()
                     ),
@@ -336,22 +342,24 @@ impl Sphinx {
             )
             .ctx("job_id", job_id.0)
         );
-        let expected = job.bond.0.checked_add(SUBMISSION_STORAGE_DEPOSIT.as_yoctonear());
+        self.check_qualified(job, agent, now)?;
+        let expected = Self::submit_deposit(job);
         ensure!(
-            expected == Some(attached),
+            expected == attached,
             SphinxError::new(
                 Code::SubmitWrongDeposit,
                 format!(
-                    "attached {attached} yoctoNEAR; job {} requires exactly {} (bond {} + storage deposit {})",
+                    "attached {attached} yoctoNEAR; job {} requires exactly {} (bond {} + storage deposit {}{})",
                     job_id.0,
-                    expected.unwrap_or_default(),
+                    expected,
                     job.bond.0,
-                    SUBMISSION_STORAGE_DEPOSIT.as_yoctonear()
+                    SUBMISSION_STORAGE_DEPOSIT.as_yoctonear(),
+                    if job.assessment.is_some() { " + badge record deposit" } else { "" }
                 ),
             )
             .ctx("job_id", job_id.0)
             .ctx("attached", attached)
-            .ctx("expected", expected.unwrap_or_default())
+            .ctx("expected", expected)
             .ctx("bond", job.bond.0)
             .ctx("storage_deposit", SUBMISSION_STORAGE_DEPOSIT.as_yoctonear())
         );
@@ -392,7 +400,11 @@ impl Sphinx {
         let usage_key = (job_id.0, sub.agent.clone());
         let mut usage = self.agent_use.get(&usage_key).cloned().unwrap_or_default();
         usage.pending = None;
-        usage.graded = usage.graded.saturating_add(1);
+        // An assessment allows one attempt; one the grader never scored does not
+        // use it up.
+        if job.assessment.is_none() {
+            usage.graded = usage.graded.saturating_add(1);
+        }
         self.expired = self.expired.saturating_add(1);
         self.record_for(&sub.agent, |s| s.expired = s.expired.saturating_add(1));
         self.sub_locked(sub.bond.0)?;
@@ -477,7 +489,15 @@ impl Sphinx {
         job.first_pass = None;
         self.fees_earned = self.fees_earned.saturating_add(fee);
         let earned = reward.saturating_sub(fee);
-        self.record_for(&sub.agent, |s| s.earned = U128(s.earned.0.saturating_add(earned)));
+        let won = reward >= WIN_FLOOR.as_yoctonear();
+        let at = env::block_timestamp();
+        self.record_for(&sub.agent, |s| {
+            s.earned = U128(s.earned.0.saturating_add(earned));
+            if won {
+                s.wins = s.wins.saturating_add(1);
+                s.last_win_at_ns = U64(at);
+            }
+        });
         self.sub_locked(reward.saturating_add(sub.bond.0))?;
         Self::pay(sub.agent.clone(), payout, "reward");
         if fee > 0 {

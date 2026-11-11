@@ -11,7 +11,9 @@ use crate::constants::{
 };
 use crate::errors::{self, ensure, Result};
 use crate::events::SphinxEvent;
-use crate::types::{CommitReceipt, Job, JobStatus, SuiteCommit};
+use crate::types::{
+    AssessmentTerms, BadgeKey, CommitReceipt, Job, JobStatus, Requirements, SuiteCommit,
+};
 use crate::{verify_signature, Sphinx, SphinxExt};
 
 #[near]
@@ -49,6 +51,8 @@ impl Sphinx {
         max_subs_total: u32,
         deadline_ns: U64,
         invited: Option<Vec<AccountId>>,
+        assessment: Option<AssessmentTerms>,
+        requires: Option<Requirements>,
     ) -> Result<U64> {
         let now = env::block_timestamp();
         let mut invited = invited.unwrap_or_default();
@@ -63,6 +67,19 @@ impl Sphinx {
             .ctx("invited", invited.len())
             .ctx("max", MAX_INVITES)
         );
+        if let Some(t) = &assessment {
+            crate::assessments::check_assessment_terms(t, max_subs_per_agent)?;
+            ensure!(
+                requires.is_none(),
+                SphinxError::new(
+                    Code::AssessmentBadTerms,
+                    "an assessment's gate is its prerequisite, not requirements"
+                )
+            );
+        }
+        if let Some(r) = &requires {
+            crate::assessments::check_requirements_terms(r)?;
+        }
         check_new_job(&NewJob {
             reward: reward.0,
             bond: bond.0,
@@ -74,6 +91,7 @@ impl Sphinx {
             spec_uri_len: spec_uri.len(),
             runtime: &runtime,
             title: &title,
+            assessment: assessment.is_some(),
         })?;
         let reward_y = reward.0;
 
@@ -94,8 +112,10 @@ impl Sphinx {
             id,
             Job {
                 id: U64(id),
-                buyer,
+                buyer: buyer.clone(),
                 title,
+                assessment: assessment.clone(),
+                requires: requires.filter(|r| !r.badges.is_empty() || r.min_wins > 0),
                 spec_uri,
                 runtime,
                 reward,
@@ -119,6 +139,9 @@ impl Sphinx {
         if !invited.is_empty() {
             SphinxEvent::AgentsInvited { job_id: U64(id), agents: invited.clone() }.emit();
             self.invites.insert(id, invited);
+        }
+        if let Some(t) = assessment {
+            self.latest_assessment.insert(BadgeKey { issuer: buyer, skill: t.skill }, id);
         }
         Ok(U64(id))
     }
@@ -288,6 +311,19 @@ impl Sphinx {
         // With submissions, the buyer may still close the job while nothing
         // passed and nothing waits for a score, so agents that fill every
         // slot with failing code cannot hold the reward until the deadline.
+        // An assessment with submissions runs to its deadline: cancelling it would
+        // return the bonds its failed attempts forfeited.
+        ensure!(
+            job.assessment.is_none() || job.sub_count == 0,
+            SphinxError::new(
+                Code::JobHasSubmissions,
+                format!(
+                    "assessment {} has submissions; close it instead (close_assessment)",
+                    job_id.0
+                ),
+            )
+            .ctx("job_id", job_id.0)
+        );
         ensure!(
             job.sub_count == 0 || (job.pending_count == 0 && job.first_pass.is_none()),
             SphinxError::new(
@@ -391,6 +427,11 @@ impl Sphinx {
     /// unclaimed balance, so a refund needs no transfer per agent. Returns
     /// the total.
     fn return_held_bonds(&mut self, job: &Job) -> Result<u128> {
+        // An assessment holds no bonds: a failed attempt's bond was forfeited
+        // when it was scored.
+        if job.assessment.is_some() {
+            return Ok(0);
+        }
         let mut total = 0u128;
         for id in 0..job.sub_count {
             let Some(sub) = self.submissions.get(&(job.id.0, id)).cloned() else { continue };
@@ -420,6 +461,8 @@ struct NewJob<'a> {
     spec_uri_len: usize,
     runtime: &'a str,
     title: &'a str,
+    /// A skill assessment: no reward, so the reward rules do not apply.
+    assessment: bool,
 }
 
 /// Enforces every bound on a new job; see the error catalog for each rule.
@@ -448,6 +491,26 @@ fn check_new_job_funds(p: &NewJob<'_>) -> Result<()> {
             .ctx("reward", reward_y)
             .ctx("storage_deposit", JOB_STORAGE_DEPOSIT.as_yoctonear())
         );
+    if p.assessment {
+        ensure!(
+            reward_y == 0,
+            SphinxError::new(
+                Code::AssessmentBadTerms,
+                "an assessment pays no reward; attach only the job storage deposit"
+            )
+        );
+        ensure!(
+            bond_y >= MIN_BOND.as_yoctonear(),
+            SphinxError::new(
+                Code::JobBondTooSmall,
+                format!("bond {bond_y} is below the minimum {}", MIN_BOND.as_yoctonear())
+            )
+            .ctx("bond", bond_y)
+            .ctx("min_bond", MIN_BOND.as_yoctonear())
+        );
+        let _ = max_subs_total;
+        return Ok(());
+    }
     ensure!(
         reward_y >= MIN_REWARD.as_yoctonear(),
         SphinxError::new(

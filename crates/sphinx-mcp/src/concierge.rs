@@ -18,6 +18,19 @@ use crate::{internal, PostJob, SphinxMcp};
 /// Agents recommended per draft.
 const RECOMMENDED: usize = 3;
 
+/// Accounts whose skill badges count when ranking agents, from
+/// `SPHINX_BADGE_ISSUERS` (comma separated). Any account can post an assessment,
+/// so badges from others are ignored.
+fn badge_issuers() -> Vec<String> {
+    std::env::var("SPHINX_BADGE_ISSUERS")
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ConciergeDraft {
     /// What you want done, in plain words, e.g. "a function that checks whether a version matches an npm semver range".
@@ -29,7 +42,7 @@ pub struct ConciergeDraft {
     pub bond_near: Option<String>,
     /// Hours until submissions close. Default 24.
     #[serde(default)]
-    pub deadline_hours: Option<u32>,
+    pub deadline_hours: Option<f64>,
     /// Graded attempts each agent may make. Default 3.
     #[serde(default)]
     pub max_subs_per_agent: Option<u32>,
@@ -64,7 +77,7 @@ pub struct ConciergePost {
 pub struct Terms {
     pub reward_near: String,
     pub bond_near: String,
-    pub deadline_hours: u32,
+    pub deadline_hours: f64,
     pub max_subs_per_agent: u32,
     pub max_subs_total: u32,
 }
@@ -154,16 +167,18 @@ impl SphinxMcp {
         let terms = Terms {
             reward_near: p.reward_near,
             bond_near: p.bond_near.unwrap_or_else(|| "0.02".into()),
-            deadline_hours: p.deadline_hours.unwrap_or(24),
+            deadline_hours: p.deadline_hours.unwrap_or(24.0),
             max_subs_per_agent: p.max_subs_per_agent.unwrap_or(3),
             max_subs_total: p.max_subs_total.unwrap_or(12),
         };
         sphinx_near::parse_near(&terms.bond_near)?;
+        crate::buyer::deadline_span_ns(terms.deadline_hours)?;
         let draft = Concierge::new(model).draft(&p.request, &mut |_| {}).await?;
         let directory = self.list_agents().await?;
         let candidates: Vec<Candidate> =
             serde_json::from_value(directory["agents"].clone()).unwrap_or_default();
-        let recommended = recommend(&candidates, &draft.skills, reward, RECOMMENDED);
+        let recommended =
+            recommend(&candidates, &draft.skills, reward, RECOMMENDED, &badge_issuers());
         let mut draft = draft;
         // Salt the reference once, here, so its public hash cannot be matched by
         // guessing a short solution, and a resumed post reads the same bytes.
@@ -210,7 +225,7 @@ impl SphinxMcp {
             .post_job(PostJob {
                 suite: saved.draft.suite.clone(),
                 reference: saved.draft.reference.clone(),
-                title: None,
+                title: Some(saved.draft.title.clone()),
                 spec_uri: None,
                 spec: Some(saved.draft.spec.clone()),
                 reward_near: t.reward_near.clone(),
@@ -220,6 +235,8 @@ impl SphinxMcp {
                 deadline_hours: t.deadline_hours,
                 job_id: p.job_id,
                 invited: invited.clone(),
+                assessment: None,
+                requires: None,
             })
             .await
             .map_err(|e| e.ctx("draft_id", &p.draft_id))?;

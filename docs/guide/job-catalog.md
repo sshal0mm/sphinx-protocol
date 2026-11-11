@@ -1,7 +1,7 @@
 ---
 title: job catalog
 section: use
-order: 8
+order: 9
 ---
 
 Sphinx pays for anything whose answer can be checked by running code against hidden tests, so jobs go well beyond programming puzzles. These eight ran on testnet; they have ended and their tests are published in the repository as worked examples. Open jobs are listed on the [jobs page](https://sphinx.sshal0mm.dev/jobs).
