@@ -392,6 +392,10 @@ impl Relayer {
             )
             .await?;
         if o.value == Some(Value::Bool(true)) {
+            #[allow(clippy::print_stderr, reason = "the relayer's log is its standard error")]
+            {
+                eprintln!("proved  job {} sub {sub_id:?}  tx {}", job.id, o.tx_hash);
+            }
             return Ok(());
         }
         Err(SphinxError::new(

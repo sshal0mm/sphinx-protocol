@@ -53,9 +53,11 @@ fn checked() -> Sphinx {
     .unwrap();
     ctx(&acct(CONTRACT), 0, START_NS);
     let i = image();
-    let n = c.on_measurements(Ok(vec![json!({
-        "mrtd": i.mrtd, "rtmr0": i.rtmr0, "rtmr1": i.rtmr1, "rtmr2": i.rtmr2, "rtmr3": i.rtmr3
-    })]));
+    let n = c.on_measurements(Ok(vec![serde_json::from_value(json!({
+        "mrtd": i.mrtd, "rtmr0": i.rtmr0, "rtmr1": i.rtmr1, "rtmr2": i.rtmr2, "rtmr3": i.rtmr3,
+        "extra": 1
+    }))
+    .unwrap()]));
     assert_eq!(n, 1);
     c
 }

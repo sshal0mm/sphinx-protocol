@@ -22,7 +22,8 @@
 //! follows for the call shape.
 
 use near_sdk::json_types::{Base64VecU8, U64};
-use near_sdk::serde_json::{self, Value};
+use near_sdk::serde::Deserialize;
+use near_sdk::serde_json;
 use near_sdk::{env, near, AccountId, Gas, NearToken, Promise, PromiseError};
 use sphinx_protocol::{Code, SphinxError};
 
@@ -50,6 +51,26 @@ pub struct EnclaveCheck {
     pub measurements_from: AccountId,
     /// The account that starts grading runs (the relayer).
     pub grader_caller: AccountId,
+}
+
+/// The two fields of a grader run's output the contract reads; a typed
+/// struct, not a generic JSON value, keeps float formatting out of the build.
+#[derive(Debug, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+struct RunOutput {
+    ok: Option<bool>,
+    message: Option<String>,
+}
+
+/// One entry of OutLayer's approved image list; other fields are ignored.
+#[derive(Debug, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct ListedImage {
+    mrtd: Option<String>,
+    rtmr0: Option<String>,
+    rtmr1: Option<String>,
+    rtmr2: Option<String>,
+    rtmr3: Option<String>,
 }
 
 /// OutLayer's per-run attestation, as its API returns it.
@@ -369,11 +390,11 @@ impl Sphinx {
             hex::encode(env::sha256(&output.0)) == a.output_hash,
             refused("the output is not the attested run's output")
         );
-        let out: Value =
+        let out: RunOutput =
             serde_json::from_slice(&output.0).map_err(|_| refused("the output is not JSON"))?;
-        let message = out["message"]
-            .as_str()
-            .filter(|_| out["ok"] == true)
+        let message = out
+            .message
+            .filter(|_| out.ok == Some(true))
             .ok_or_else(|| refused("the output holds no signed result"))?;
         let report_data = hex::encode(a.task_hash());
         Ok(Promise::new(check.quote_verifier)
@@ -386,7 +407,7 @@ impl Sphinx {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(CONFIRMED_GAS)
-                    .on_run_verified(job_id, sub_id, report_data, message.to_owned()),
+                    .on_run_verified(job_id, sub_id, report_data, message),
             ))
     }
 
@@ -458,19 +479,19 @@ impl Sphinx {
     #[private]
     pub fn on_measurements(
         &mut self,
-        #[callback_result] list: Result<Vec<Value>, PromiseError>,
+        #[callback_result] list: Result<Vec<ListedImage>, PromiseError>,
     ) -> u32 {
         let Ok(list) = list else { return 0 };
-        let field = |v: &Value, k: &str| v[k].as_str().map(str::to_ascii_lowercase);
+        let field = |v: &Option<String>| v.as_deref().map(str::to_ascii_lowercase);
         let images: Vec<[u8; 32]> = list
             .iter()
             .filter_map(|v| {
                 Measurements {
-                    mrtd: field(v, "mrtd")?,
-                    rtmr0: field(v, "rtmr0")?,
-                    rtmr1: field(v, "rtmr1")?,
-                    rtmr2: field(v, "rtmr2")?,
-                    rtmr3: field(v, "rtmr3")?,
+                    mrtd: field(&v.mrtd)?,
+                    rtmr0: field(&v.rtmr0)?,
+                    rtmr1: field(&v.rtmr1)?,
+                    rtmr2: field(&v.rtmr2)?,
+                    rtmr3: field(&v.rtmr3)?,
                 }
                 .digest()
             })
