@@ -70,7 +70,7 @@ pub enum SphinxEvent {
     #[event_version("1.0.0")]
     BadgeRevoked { agent: AccountId, issuer: AccountId, skill: String, reason: String },
     #[event_version("1.0.0")]
-    Retired { owner: AccountId, balance: U128 },
+    Retired { owner: AccountId, balance: U128, agent_deposits_returned: u32 },
     #[event_version("1.0.0")]
     JobCancelled { job_id: U64, refund: U128 },
     #[event_version("1.0.0")]

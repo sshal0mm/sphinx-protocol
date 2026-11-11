@@ -59,6 +59,7 @@ impl Sphinx {
     #[payable]
     #[handle_result(aliased)]
     pub fn deposit_balance(&mut self) -> Result<U128> {
+        Self::assert_live()?;
         let account = env::predecessor_account_id();
         let attached = env::attached_deposit().as_yoctonear();
         let balance = if let Some(b) = read(&account) {
@@ -136,6 +137,7 @@ impl Sphinx {
         code_uri: String,
         code_hash: String,
     ) -> Result<SubmitReceipt> {
+        Self::assert_live()?;
         let agent = env::predecessor_account_id();
         let needed = Self::submit_deposit(&self.job(job_id.0)?);
         let balance = read(&agent).unwrap_or(0);

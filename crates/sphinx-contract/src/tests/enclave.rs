@@ -259,23 +259,57 @@ fn the_owner_closes_the_contract_only_after_the_date_and_only_when_it_owes_nothi
     let job = post(&mut c, 2, 5);
 
     ctx(&owner(), 1, START_NS + 31 * DAY_NS);
-    assert_eq!(code_of(c.retire().map(|_| ())), Code::RetireNotEmpty, "a reward is still locked");
+    assert_eq!(
+        code_of(c.retire(key()).map(|_| ())),
+        Code::RetireNotEmpty,
+        "a reward is still locked"
+    );
 
     ctx(&buyer(), 1, START_NS + 2);
     c.cancel_job(job).unwrap();
     ctx(&owner(), 1, START_NS + 2);
-    assert_eq!(code_of(c.retire().map(|_| ())), Code::RetireTooEarly);
+    assert_eq!(code_of(c.retire(key()).map(|_| ())), Code::RetireTooEarly);
     ctx(&acct("mallory"), 1, START_NS + 31 * DAY_NS);
-    assert_eq!(code_of(c.retire().map(|_| ())), Code::AuthNotOwner);
+    assert_eq!(code_of(c.retire(key()).map(|_| ())), Code::AuthNotOwner);
+    // A registered agent's deposit is owed back too.
+    let agent = acct("agent-z");
+    ctx(&agent, crate::constants::AGENT_STORAGE_DEPOSIT.as_yoctonear(), START_NS + 3);
+    c.register_agent("Z".into(), String::new(), vec![], U128(0), String::new(), Some("zed".into()))
+        .unwrap();
+
     ctx(&owner(), 1, START_NS + 31 * DAY_NS);
-    let _closing = c.retire().unwrap();
+    assert!(!c.is_retired());
+    let _closing = c.retire(key()).unwrap();
     assert!(events().iter().any(|e| e == "retired"), "{:?}", events());
+    assert!(c.is_retired());
+    assert!(
+        transfers()
+            .contains(&(agent.clone(), crate::constants::AGENT_STORAGE_DEPOSIT.as_yoctonear())),
+        "the agent's deposit is returned: {:?}",
+        transfers()
+    );
+    assert!(
+        c.get_agent(agent.clone()).is_none() && c.get_agent_by_username("zed".into()).is_none()
+    );
+
+    // Nothing new comes in once retired.
+    ctx(&buyer(), NEAR, START_NS + 32 * DAY_NS);
+    assert_eq!(code_of(c.deposit_balance().map(|_| ())), Code::ContractRetired);
+    ctx(&agent, crate::constants::AGENT_STORAGE_DEPOSIT.as_yoctonear(), START_NS + 32 * DAY_NS);
+    assert_eq!(
+        code_of(c.register_agent("Z".into(), String::new(), vec![], U128(0), String::new(), None)),
+        Code::ContractRetired
+    );
 
     let mut never = contract();
     ctx(&owner(), 1, u64::MAX - 1);
     assert_eq!(
-        code_of(never.retire().map(|_| ())),
+        code_of(never.retire(key()).map(|_| ())),
         Code::RetireTooEarly,
         "no retire date set: never"
     );
+}
+
+fn key() -> near_sdk::PublicKey {
+    "ed25519:DcA2MzgpJbrUATQLLceocVckhhAqrkingax4oJ9kZ847".parse().unwrap()
 }

@@ -47,7 +47,7 @@ It then asks NEAR's DCAP verifier contract to check Intel's signature on the quo
 |---|---|---|
 | `confirm_run` | anyone, about 250 Tgas | proves one grading run, as above |
 | `sync_measurements` | anyone | reads OutLayer's approved worker images |
-| `retire` | the owner, after the retire date, when the contract owes nothing | closes the contract and returns its whole balance to the owner |
+| `retire` | the owner, after the retire date, when the contract owes nothing | returns every registered agent's deposit, stops new jobs, submissions and deposits for good, and gives the owner a key to clear the stored state and close the account, which returns its balance (NEAR refuses to delete an account holding more than 10,000 bytes besides its code, so the contract cannot delete itself) |
 
 ## prepaid balances
 

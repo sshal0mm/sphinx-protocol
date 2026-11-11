@@ -192,6 +192,12 @@ Every Sphinx error carries a stable `code`, a one-line `message` with the actual
 - bond_effect: `none`
 - hint: close the contract only once it owes nothing (contract view get_stats)
 
+### SPHINX_E_CONTRACT_RETIRED
+
+- retry: `never`
+- bond_effect: `none`
+- hint: this contract is closed and takes no new jobs, submissions or deposits; withdrawals still work
+
 ### SPHINX_E_JOB_BAD_RUNTIME
 
 - retry: `fix_input`

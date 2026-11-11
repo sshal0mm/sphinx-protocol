@@ -54,6 +54,7 @@ impl Sphinx {
         assessment: Option<AssessmentTerms>,
         requires: Option<Requirements>,
     ) -> Result<U64> {
+        Self::assert_live()?;
         let now = env::block_timestamp();
         let mut invited = invited.unwrap_or_default();
         invited.sort();

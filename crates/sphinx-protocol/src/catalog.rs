@@ -128,6 +128,8 @@ catalog! {
         "the contract can be closed only after its retire date (contract view get_config)";
     RetireNotEmpty => "SPHINX_E_RETIRE_NOT_EMPTY", Contract, Wait, None,
         "close the contract only once it owes nothing (contract view get_stats)";
+    ContractRetired => "SPHINX_E_CONTRACT_RETIRED", Contract, Never, None,
+        "this contract is closed and takes no new jobs, submissions or deposits; withdrawals still work";
     JobBadRuntime => "SPHINX_E_JOB_BAD_RUNTIME", Contract, FixInput, None,
         "use one of the runtimes listed in ctx.known";
     JobHasSubmissions => "SPHINX_E_JOB_HAS_SUBMISSIONS", Contract, Never, None,

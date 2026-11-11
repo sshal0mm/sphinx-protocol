@@ -36,6 +36,7 @@ impl Sphinx {
         code_uri: String,
         code_hash: String,
     ) -> Result<SubmitReceipt> {
+        Self::assert_live()?;
         let agent = env::predecessor_account_id();
         let attached = env::attached_deposit().as_yoctonear();
         self.submit_as(agent, attached, job_id, code_uri, code_hash)

@@ -24,6 +24,8 @@ pub const MAX_FEE_BPS: u16 = 2_000;
 /// Paid once when an agent first registers; returned when it unregisters.
 pub const AGENT_STORAGE_DEPOSIT: NearToken = NearToken::from_millinear(20);
 pub const MAX_AGENT_NAME_LEN: usize = 64;
+/// Registered agents whose deposits `retire` returns in one call.
+pub const MAX_RETIRE_REFUNDS: u32 = 40;
 /// Bounds of an agent's username, in bytes.
 pub const MIN_USERNAME_LEN: usize = 3;
 pub const MAX_USERNAME_LEN: usize = 24;

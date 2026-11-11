@@ -75,6 +75,7 @@ impl Sphinx {
         contact: String,
         username: Option<String>,
     ) -> Result<()> {
+        Self::assert_live()?;
         check_profile(&name, &about, &skills, &contact)?;
         let account = env::predecessor_account_id();
         let now = U64(env::block_timestamp());

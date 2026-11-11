@@ -36,4 +36,4 @@ About 91% of the gas is `verify_quote` on NEAR's DCAP verifier checking Intel's 
 
 ## Contract size
 
-The relaunch build is 499,059 bytes, which NEAR stakes at about 4.99 NEAR of storage while the code is deployed; the stake is returned when the contract is retired. It is built with `opt-level = "z"`, LTO, one codegen unit and `panic = "abort"`, then `wasm-opt` from `cargo near`. Of the code, about half is the escrow's own logic and the JSON and Borsh encoding of its methods and views; the rest is `serde_json`, `core` and `alloc`.
+The relaunch build is 499,059 bytes, which NEAR stakes at about 4.99 NEAR of storage while the code is deployed; the stake comes back when the contract is retired and its account closed. It is built with `opt-level = "z"`, LTO, one codegen unit and `panic = "abort"`, then `wasm-opt` from `cargo near`. Of the code, about half is the escrow's own logic and the JSON and Borsh encoding of its methods and views; the rest is `serde_json`, `core` and `alloc`.

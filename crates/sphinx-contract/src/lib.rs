@@ -39,7 +39,9 @@ use near_sdk::store::{IterableMap, LookupMap, LookupSet, Vector};
 use near_sdk::{env, near, AccountId, BorshStorageKey, PanicOnDefault};
 use sphinx_protocol::{Code, Hash32, SphinxError};
 
-use crate::constants::{MAX_ATTESTATION_REF_LEN, MAX_FEE_BPS};
+use crate::constants::{
+    AGENT_STORAGE_DEPOSIT, MAX_ATTESTATION_REF_LEN, MAX_FEE_BPS, MAX_RETIRE_REFUNDS,
+};
 use crate::errors::{ensure, ContractError, Result};
 use crate::events::SphinxEvent;
 use crate::tee::EnclaveCheck;
@@ -270,11 +272,16 @@ impl Sphinx {
         Ok(())
     }
 
-    /// Closes the contract and sends its whole balance to the owner: allowed
-    /// only for the owner, only after the retire date fixed at
-    /// initialisation, and only when the contract owes nothing (no locked
-    /// reward, bond or prepaid balance and no unclaimed payout). This is how
-    /// the storage deposit comes back once the contract's own keys are gone.
+    /// Closes the contract and hands it back to the owner: allowed only for
+    /// the owner, only after the retire date fixed at initialisation, and
+    /// only when the contract owes nothing (no locked reward, bond or prepaid
+    /// balance and no unclaimed payout). Registered agents get their
+    /// deposits back, the contract stops taking jobs, submissions and
+    /// deposits for good, and `public_key` becomes a full-access key of the
+    /// contract account. With it the owner clears the stored state and
+    /// deletes the account, which returns the storage stake: NEAR refuses to
+    /// delete an account holding more than 10,000 bytes besides its code, so
+    /// the contract cannot simply delete itself.
     ///
     /// # Errors
     ///
@@ -283,7 +290,7 @@ impl Sphinx {
     /// - `SPHINX_E_RETIRE_NOT_EMPTY`
     #[payable]
     #[handle_result(aliased)]
-    pub fn retire(&mut self) -> Result<near_sdk::Promise> {
+    pub fn retire(&mut self, public_key: near_sdk::PublicKey) -> Result<near_sdk::Promise> {
         near_sdk::assert_one_yocto();
         self.assert_owner()?;
         let now = env::block_timestamp();
@@ -309,17 +316,58 @@ impl Sphinx {
             .ctx("total_locked", self.total_locked)
             .ctx("total_unclaimed", self.total_unclaimed)
         );
+        let agents = self.agents.len();
+        ensure!(
+            agents <= MAX_RETIRE_REFUNDS,
+            SphinxError::new(
+                Code::RetireNotEmpty,
+                format!("{agents} agents are registered; retire returns at most {MAX_RETIRE_REFUNDS} deposits, so some must unregister first"),
+            )
+            .ctx("registered_agents", agents)
+        );
+        let registered: Vec<AccountId> = self.agents.keys().cloned().collect();
+        for agent in &registered {
+            self.agents.remove(agent);
+            Self::release_username(agent);
+            Self::pay(
+                agent.clone(),
+                AGENT_STORAGE_DEPOSIT.as_yoctonear(),
+                "agent_deposit_returned",
+            );
+        }
+        env::storage_write(RETIRED_KEY, &[1]);
         let balance = env::account_balance().as_yoctonear();
         SphinxEvent::Retired {
             owner: self.owner.clone(),
             balance: near_sdk::json_types::U128(balance),
+            agent_deposits_returned: u32::try_from(registered.len()).unwrap_or(u32::MAX),
         }
         .emit();
-        Ok(near_sdk::Promise::new(env::current_account_id()).delete_account(self.owner.clone()))
+        Ok(near_sdk::Promise::new(env::current_account_id()).add_full_access_key(public_key))
+    }
+
+    /// Whether the contract has been retired.
+    pub fn is_retired(&self) -> bool {
+        env::storage_has_key(RETIRED_KEY)
     }
 }
 
+/// Set by `retire`; kept outside the contract struct so the layout is unchanged.
+const RETIRED_KEY: &[u8] = b"sphinx:retired";
+
 impl Sphinx {
+    /// Refuses new money once the contract is retired.
+    pub(crate) fn assert_live() -> Result<()> {
+        ensure!(
+            !env::storage_has_key(RETIRED_KEY),
+            SphinxError::new(
+                Code::ContractRetired,
+                "this contract is retired and takes nothing new"
+            )
+        );
+        Ok(())
+    }
+
     fn assert_owner(&self) -> Result<()> {
         let caller = env::predecessor_account_id();
         ensure!(caller == self.owner, errors::not_owner(&caller, &self.owner));

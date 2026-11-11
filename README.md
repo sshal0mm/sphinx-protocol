@@ -280,4 +280,4 @@ Rust: near-sdk, near-api, boa_engine (the JavaScript engine in the grader), dcap
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+Source-available, all rights reserved: read it, build and run it unchanged to verify Sphinx's results, and use the hosted service; anything else needs written permission. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
