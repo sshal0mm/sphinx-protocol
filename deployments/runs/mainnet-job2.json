@@ -665,5 +665,6 @@
       }
     }
   ],
-  "explorer": "https://nearblocks.io/address/escrow.sphinxescrow.near"
+  "explorer": "https://nearblocks.io/address/escrow.sphinxescrow.near",
+  "title": "Liquidation price for an isolated-margin perp"
 }

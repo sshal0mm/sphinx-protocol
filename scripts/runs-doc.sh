@@ -22,7 +22,7 @@ render() {
       def secs(a; z): if a and z then (((z | tonumber) - (a | tonumber)) / 1e9 * 10 | round / 10 | tostring) else "–" end;
       . as $b
       | (if $b.network == "mainnet" then "https://nearblocks.io/txns" else "https://testnet.nearblocks.io/txns" end) as $ex
-      | ($b.job.title // ("job " + $b.job.id)) as $name
+      | ($b.title // $b.job.title // ("job " + $b.job.id)) as $name
       | (if $b.job.assessment then "assessment: " + $name else $name end) as $label
       | ([$b.results[] | select(.kind == "score")]) as $scores
       | $b.submissions[]

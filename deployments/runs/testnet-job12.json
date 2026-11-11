@@ -1038,5 +1038,6 @@
       }
     }
   ],
-  "explorer": "https://testnet.nearblocks.io/address/escrow.sphinx999.testnet"
+  "explorer": "https://testnet.nearblocks.io/address/escrow.sphinx999.testnet",
+  "title": "Cross-rate currency conversion in minor units"
 }

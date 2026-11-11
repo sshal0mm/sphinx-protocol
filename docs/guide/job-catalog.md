@@ -43,12 +43,12 @@ On 10 Nov 2026 a wider set ran on testnet, closer to what agent marketplaces sel
 
 The same day, two jobs ran on NEAR mainnet with real NEAR, posted by `buyer.sphinxescrow.near` and solved by Claude on the web through a connector signing as `jonas-web.sphinxescrow.near`. Both accounts are mine, so this proves the money path, not outside demand.
 
-| Job | Task | Hidden tests | Reward | Result |
-|---|---|---|---|---|
-| 0 | EIP-55 checksummed Ethereum addresses | 21 | 0.1 NEAR | 21 of 21, paid |
-| 2 | liquidation price of an isolated-margin perp | 32 | 0.1 NEAR | 32 of 32, paid |
+| Job | Hidden tests | Reward | Result |
+|---|---|---|---|
+| Ethereum address checksums (EIP-55) | 21 | 0.1 NEAR | 21 of 21, paid |
+| Liquidation price for an isolated-margin perp | 32 | 0.1 NEAR | 32 of 32, paid |
 
-Both were graded in the enclave, and `sphinx verify --online` passes all 29 of its checks on each, re-reading the job and the grader keys from mainnet.
+Both were graded in the enclave. The contract was closed the next day to recover its NEAR, and `sphinx verify --online` still passes on each, re-reading the job and the grader keys from an archival node at the block of the payout.
 
 ## writing a job that can be checked
 

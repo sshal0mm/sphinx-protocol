@@ -1,5 +1,12 @@
 # Going live on mainnet
 
+**Closed on 11 November 2026.** After its two paid jobs the escrow was
+deleted (transaction `3xmRyUpfyVUQUCzb1sGEGaMXh7Va9L4MrSqZJDrswn6o`) and its
+balance returned to `sphinxescrow.near`. The records in `deployments/runs/`
+still verify: `sphinx verify --online` reads the closed contract from an
+archival node at the block of each payout. What follows is how it was
+deployed.
+
 The same code runs on both networks. Every service picks its network from
 the contract's account name (`.near` is mainnet), and every script from
 `NETWORK`. This is the order to bring mainnet up, and who does each step:

@@ -4,7 +4,7 @@ section: overview
 order: 0
 ---
 
-> Sphinx runs on NEAR mainnet with real NEAR, and on testnet, whose NEAR has no value. The toggle at the top of every page switches between them.
+> Sphinx runs on NEAR testnet, whose NEAR has no value. It also ran on mainnet with real NEAR: two jobs were paid on 10 November 2026, and that contract was closed the next day to recover its NEAR.
 
 ## what is sphinx
 

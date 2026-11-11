@@ -367,17 +367,28 @@ async fn fetch_approved(contract: &str) -> Result<Value, String> {
 pub async fn online_checks(bundle: &Value) -> Result<Report, String> {
     let mut r = Report::default();
     let contract = s(bundle, &["contract"]);
-    let rpc = rpc_for(contract, false);
+    // A contract closed after the run is read from an archival node at the
+    // block its last signed result executed in.
+    let (rpc, at) = match closed_at(contract, bundle).await? {
+        None => (rpc_for(contract, false), None),
+        Some(block) => {
+            r.push(
+                true,
+                format!("{contract} has since been closed; its state is read from an archival node at block {block}, where the last signed result executed"),
+            );
+            (rpc_for(contract, true), Some(block))
+        }
+    };
+    let at = at.as_deref();
     let job_id = s(&bundle["job"], &["id"]);
     let (job, _) =
-        view_call(&rpc, contract, "get_job", &serde_json::json!({ "job_id": job_id }), None)
-            .await?;
+        view_call(&rpc, contract, "get_job", &serde_json::json!({ "job_id": job_id }), at).await?;
     let (subs, _) = view_call(
         &rpc,
         contract,
         "list_submissions",
         &serde_json::json!({ "job_id": job_id, "limit": 50 }),
-        None,
+        at,
     )
     .await?;
     if bundle["job"]["assessment"].is_object() {
@@ -394,13 +405,13 @@ pub async fn online_checks(bundle: &Value) -> Result<Report, String> {
             recorded.iter().all(|x| live.contains(x)),
             "its recorded attempts are on chain as recorded",
         );
-        check_badges(&mut r, &rpc, contract, job_id, &recorded).await?;
+        check_badges(&mut r, &rpc, contract, job_id, &recorded, at).await?;
     } else {
         r.push(job == bundle["job"], format!("job {job_id} on {contract} is as recorded"));
         r.push(subs == bundle["submissions"], "its submissions on chain are as recorded");
     }
     let (history, _) =
-        view_call(&rpc, contract, "get_grader_history", &serde_json::json!({}), None).await?;
+        view_call(&rpc, contract, "get_grader_history", &serde_json::json!({}), at).await?;
     let live = history.as_array().cloned().unwrap_or_default();
     let recorded = bundle["grader_history"].as_array().cloned().unwrap_or_default();
     r.push(
@@ -409,7 +420,7 @@ pub async fn online_checks(bundle: &Value) -> Result<Report, String> {
     );
     match bundle["code_sha256"].as_str() {
         Some(recorded) => {
-            let live = code_sha256(&rpc, contract).await?;
+            let live = code_sha256(&rpc, contract, at).await?;
             r.push(
                 live == recorded,
                 format!(
@@ -420,7 +431,7 @@ pub async fn online_checks(bundle: &Value) -> Result<Report, String> {
         }
         None => r.skip("the deployed code (this recording predates code hashes)".to_owned()),
     }
-    let (config, _) = view_call(&rpc, contract, "get_config", &serde_json::json!({}), None).await?;
+    let (config, _) = view_call(&rpc, contract, "get_config", &serde_json::json!({}), at).await?;
     r.push(config["allow_dev_keys"] == false, "the contract refuses dev keys now");
     let approved = &bundle["grader"]["approved_measurements"];
     let account = worker_account(contract);
@@ -451,11 +462,12 @@ async fn check_badges(
     contract: &str,
     job_id: &str,
     recorded: &[Value],
+    at: Option<&str>,
 ) -> Result<(), String> {
     for sub in recorded.iter().filter(|x| s(x, &["status"]) == "Passed") {
         let agent = s(sub, &["agent"]);
         let (badges, _) =
-            view_call(rpc, contract, "get_badges", &serde_json::json!({ "account": agent }), None)
+            view_call(rpc, contract, "get_badges", &serde_json::json!({ "account": agent }), at)
                 .await?;
         let found = badges.as_array().and_then(|list| {
             list.iter()
@@ -475,9 +487,58 @@ async fn check_badges(
 
 /// The SHA-256 of the code `account` runs now, as lowercase hex (the chain
 /// reports it in base58).
-async fn code_sha256(rpc: &str, account: &str) -> Result<String, String> {
+/// `None` while `contract` exists; once it has been deleted, the hash of the
+/// block in which the bundle's last signed result executed.
+async fn closed_at(contract: &str, bundle: &Value) -> Result<Option<String>, String> {
+    let rpc = rpc_for(contract, false);
     let body = serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": "query",
-        "params": { "request_type": "view_account", "finality": "final", "account_id": account } });
+        "params": { "request_type": "view_account", "finality": "final", "account_id": contract } });
+    let reply: Value = reqwest::Client::new()
+        .post(&rpc)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("view_account {contract}: {e}"))?
+        .json()
+        .await
+        .map_err(|e| format!("view_account {contract}: {e}"))?;
+    if reply["error"]["cause"]["name"] != "UNKNOWN_ACCOUNT" {
+        return Ok(None);
+    }
+    let last = bundle["results"].as_array().and_then(|v| v.last()).cloned().unwrap_or(Value::Null);
+    let (tx, signer) = (s(&last, &["tx_hash"]), s(&last, &["signer"]));
+    if tx.is_empty() {
+        return Err(format!(
+            "{contract} no longer exists and the bundle names no result transaction"
+        ));
+    }
+    let body = serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": "EXPERIMENTAL_tx_status",
+        "params": { "tx_hash": tx, "sender_account_id": signer, "wait_until": "FINAL" } });
+    let status: Value = reqwest::Client::new()
+        .post(rpc_for(contract, true))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("tx {tx}: {e}"))?
+        .json()
+        .await
+        .map_err(|e| format!("tx {tx}: {e}"))?;
+    status["result"]["receipts_outcome"]
+        .as_array()
+        .and_then(|r| r.last())
+        .and_then(|o| o["block_hash"].as_str())
+        .map(|b| Some(b.to_owned()))
+        .ok_or_else(|| format!("tx {tx}: no receipt block on the archival node"))
+}
+
+async fn code_sha256(rpc: &str, account: &str, at: Option<&str>) -> Result<String, String> {
+    let mut params = serde_json::json!({ "request_type": "view_account", "account_id": account });
+    match at {
+        Some(hash) => params["block_id"] = hash.into(),
+        None => params["finality"] = "final".into(),
+    }
+    let body =
+        serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": "query", "params": params });
     let reply: Value = reqwest::Client::new()
         .post(rpc)
         .json(&body)

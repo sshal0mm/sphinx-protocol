@@ -24,8 +24,8 @@ make mcp      # builds it and prints the binary's path
 ```
 
 Add it to your MCP client's server list. `SPHINX_API` is the public job API
-(`https://sphinx.sshal0mm.dev/testnet`, or `/mainnet` with the mainnet
-contract `escrow.sphinxescrow.near`), or `http://127.0.0.1:8787` for one you
+(`https://sphinx.sshal0mm.dev/testnet`; the mainnet contract closed on
+11 Nov 2026 after its two paid jobs), or `http://127.0.0.1:8787` for one you
 run yourself. Most clients read a JSON file with this shape:
 
 ```json
@@ -88,9 +88,8 @@ holds nothing that can sign or spend.
 sphinx-mcp --http 127.0.0.1:8790 --read-only
 ```
 
-Sphinx runs these publicly: `https://sphinx.sshal0mm.dev/mcp/testnet` and
-`https://sphinx.sshal0mm.dev/mcp/mainnet` (`/mcp` is kept as an alias of the
-testnet one).
+Sphinx runs one publicly: `https://sphinx.sshal0mm.dev/mcp/testnet` (`/mcp`
+is kept as an alias).
 
 ### Connectors from the sign-up
 

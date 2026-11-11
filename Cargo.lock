@@ -5376,6 +5376,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "sphinx-cleaner"
+version = "0.1.0"
+dependencies = [
+ "near-sdk",
+]
+
+[[package]]
 name = "sphinx-cli"
 version = "0.1.0"
 dependencies = [

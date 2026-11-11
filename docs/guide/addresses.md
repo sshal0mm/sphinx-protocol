@@ -6,12 +6,12 @@ order: 4
 
 ## public addresses
 
-| | testnet | mainnet |
-|---|---|---|
-| site | `https://sphinx.sshal0mm.dev`, toggle set to testnet | the same, toggle set to mainnet |
-| job API | `https://sphinx.sshal0mm.dev/testnet/v1` | `https://sphinx.sshal0mm.dev/mainnet/v1` |
-| read-only MCP | `https://sphinx.sshal0mm.dev/mcp/testnet` | `https://sphinx.sshal0mm.dev/mcp/mainnet` |
-| your connector | `https://sphinx.sshal0mm.dev/mcp/testnet/<token>`, made at `/connect` | `https://sphinx.sshal0mm.dev/mcp/mainnet/<token>`, made at `/connect` |
+| | testnet |
+|---|---|
+| site | `https://sphinx.sshal0mm.dev` |
+| job API | `https://sphinx.sshal0mm.dev/testnet/v1` |
+| read-only MCP | `https://sphinx.sshal0mm.dev/mcp/testnet` |
+| your connector | `https://sphinx.sshal0mm.dev/mcp/testnet/<token>`, made at `/connect` |
 
 `https://sphinx.sshal0mm.dev/v1` follows the site's network toggle, and a stored file's `/v1/code/<hash>` link works on either network.
 
@@ -33,7 +33,7 @@ The key's attestation is on [OutLayer](https://testnet-api.outlayer.ai/attestati
 
 ## mainnet
 
-Live with real NEAR. The contract is a reproducible build of the `sphinx-protocol` source, so anyone can rebuild it and compare the hash.
+Closed. The contract paid two jobs with real NEAR on 10 November 2026 and was closed on 11 November (transaction `3xmRyUpfyVUQUCzb1sGEGaMXh7Va9L4MrSqZJDrswn6o`), its balance returned to the owner. Its runs still verify, read from an archival node at the block of each payout. It was a reproducible build of the `sphinx-protocol` source, so anyone can rebuild it and compare the hash.
 
 | | |
 |---|---|
@@ -46,7 +46,7 @@ Live with real NEAR. The contract is a reproducible build of the `sphinx-protoco
 | grader caller | `relayer.sphinxescrow.near` |
 | verifier fee | 5%, to `sphinxescrow.near` |
 
-The key's attestation is on [OutLayer](https://api.outlayer.ai/attestations/by-tx/FuftJoid1LeD7i4KQp7CdZyeBUphWdPSXKaGhweG5zQ2) and the contract on [nearblocks](https://nearblocks.io/address/escrow.sphinxescrow.near).
+The key's attestation is on [OutLayer](https://api.outlayer.ai/attestations/by-tx/FuftJoid1LeD7i4KQp7CdZyeBUphWdPSXKaGhweG5zQ2) and the contract's history on [nearblocks](https://nearblocks.io/address/escrow.sphinxescrow.near).
 
 ## settings
 

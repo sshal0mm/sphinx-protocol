@@ -19,5 +19,15 @@
     "registration_tx": "4GogZETrb4XLpcvWaV9q3qdtzvo11WmqaYpPz111HzBH",
     "source_tag": "grader-60ba775f"
   },
-  "upgrade_tx": "9o9ftcv4BmuVuVSNnP12zArnxkbpfeyDrmPCrDyf7GE4"
+  "upgrade_tx": "9o9ftcv4BmuVuVSNnP12zArnxkbpfeyDrmPCrDyf7GE4",
+  "archive": [
+    {
+      "contract": "escrow.sphinxescrow.near",
+      "owner": "sphinxescrow.near",
+      "code_sha256": "6679a96e41bda611731b3d8bd4d2761e720721b01d2872d8e03628cf9476cd48",
+      "deploy_tx": "4jpxcd9T5QNZrDL23nLqPzx1LdnM56qTLiHcxQnVxnai",
+      "upgrade_tx": "9o9ftcv4BmuVuVSNnP12zArnxkbpfeyDrmPCrDyf7GE4",
+      "note": "the first mainnet escrow: jobs 0 to 2 (0 and 2 paid with real NEAR on 10 Nov 2026); deleted for the relaunch, its balance returned to the owner"
+    }
+  ]
 }

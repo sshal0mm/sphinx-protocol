@@ -1082,5 +1082,6 @@
       }
     }
   ],
-  "explorer": "https://testnet.nearblocks.io/address/escrow.sphinx999.testnet"
+  "explorer": "https://testnet.nearblocks.io/address/escrow.sphinx999.testnet",
+  "title": "Gas probe"
 }
