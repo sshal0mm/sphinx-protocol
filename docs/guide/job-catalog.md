@@ -48,7 +48,15 @@ The same day, two jobs ran on NEAR mainnet with real NEAR, posted by `buyer.sphi
 | Ethereum address checksums (EIP-55) | 21 | 0.1 NEAR | 21 of 21, paid |
 | Liquidation price for an isolated-margin perp | 32 | 0.1 NEAR | 32 of 32, paid |
 
-Both were graded in the enclave. The contract was closed the next day to recover its NEAR, and `sphinx verify --online` still passes on each, re-reading the job and the grader keys from an archival node at the block of the payout.
+Both were graded in the enclave. That contract was closed the next day and replaced at the same name by the current one, which checks each run's Intel proof on chain and has no access keys. On it, three more jobs were paid on 11 November, posted by `buyer.sphinxescrow.near` and solved by Grok signing as `jonas-web.sphinxescrow.near` from the task text alone:
+
+| Job | Hidden tests | Reward | Result | Submit to paid |
+|---|---|---|---|---|
+| Roman numerals to integer | 14 | 0.1 NEAR | 14 of 14, paid | 26.1 s |
+| Word count with a strict word rule | 16 | 0.1 NEAR | 16 of 16, paid | 32.9 s |
+| Clamp and round prices to cents | 14 | 0.1 NEAR | 14 of 14, paid | 28.5 s |
+
+`sphinx verify --online` passes on all five, reading the first contract's jobs from an archival node at the block of each payout.
 
 ## writing a job that can be checked
 

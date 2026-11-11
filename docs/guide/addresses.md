@@ -6,12 +6,12 @@ order: 4
 
 ## public addresses
 
-| | testnet |
-|---|---|
-| site | `https://sphinx.sshal0mm.dev` |
-| job API | `https://sphinx.sshal0mm.dev/testnet/v1` |
-| read-only MCP | `https://sphinx.sshal0mm.dev/mcp/testnet` |
-| your connector | `https://sphinx.sshal0mm.dev/mcp/testnet/<token>`, made at `/connect` |
+| | mainnet | testnet |
+|---|---|---|
+| site | `https://sphinx.sshal0mm.dev`, toggle set to mainnet | the same, toggle set to testnet |
+| job API | `https://sphinx.sshal0mm.dev/mainnet/v1` | `https://sphinx.sshal0mm.dev/testnet/v1` |
+| read-only MCP | `https://sphinx.sshal0mm.dev/mcp/mainnet` | `https://sphinx.sshal0mm.dev/mcp/testnet` |
+| your connector | `https://sphinx.sshal0mm.dev/mcp/mainnet/<token>`, made at `/connect` | `https://sphinx.sshal0mm.dev/mcp/testnet/<token>`, made at `/connect` |
 
 `https://sphinx.sshal0mm.dev/v1` follows the site's network toggle, and a stored file's `/v1/code/<hash>` link works on either network.
 
@@ -33,20 +33,23 @@ The key's attestation is on [OutLayer](https://testnet-api.outlayer.ai/attestati
 
 ## mainnet
 
-Closed. The contract paid two jobs with real NEAR on 10 November 2026 and was closed on 11 November (transaction `3xmRyUpfyVUQUCzb1sGEGaMXh7Va9L4MrSqZJDrswn6o`), its balance returned to the owner. Its runs still verify, read from an archival node at the block of each payout. It was a reproducible build of the `sphinx-protocol` source, so anyone can rebuild it and compare the hash.
+Live with real NEAR since 11 November 2026. The contract is a reproducible build of the `sphinx-protocol` source, checks every enclave run's Intel proof on chain, and has no access keys: its only full-access key was deleted after deployment (transaction `53wfG4vci5D9ku1FoWtuwkAaQ5VGqEox8p7c9mfab5cx`). An earlier contract at the same name paid two jobs on 10 November and was closed to make way for it (transaction `3xmRyUpfyVUQUCzb1sGEGaMXh7Va9L4MrSqZJDrswn6o`).
 
 | | |
 |---|---|
 | contract | `escrow.sphinxescrow.near` |
 | owner | `sphinxescrow.near` |
-| contract build (SHA-256) | `6679a96e41bda611731b3d8bd4d2761e720721b01d2872d8e03628cf9476cd48`, from `sphinx-protocol` commit `8f64fe3`; first deployed as `bd35ad59…efe6`, upgraded on 10 November 2026 to add prepaid balances, state kept |
+| contract build (SHA-256) | `19f72965a4cb22bca26203ede178c34f684611c7f24c863aae74b69f0985d399`, from `sphinx-protocol` commit `afcb98a` |
+| enclave proof check | NEAR's verifier `tee-verifier-2026-08-04.near`, images from `worker.outlayer.near` |
+| access keys | none |
+| retire date | 1 December 2026 |
 | grader build (SHA-256) | `60ba775f4163829baadc931de28c61493f6ed7dba352b34d2c18c10a68d17ff8`, the same build as testnet |
 | grader signing key | `2e92eeadd4d5b3f66038594493f261c5d9b9751da6417ae5de8fb14f8332fae7` |
 | grader box key | `cf626a58126813761a63b12c694e7b6d1d8c96d7a6f32673832a9c29561df03e` |
 | grader caller | `relayer.sphinxescrow.near` |
 | verifier fee | 5%, to `sphinxescrow.near` |
 
-The key's attestation is on [OutLayer](https://api.outlayer.ai/attestations/by-tx/FuftJoid1LeD7i4KQp7CdZyeBUphWdPSXKaGhweG5zQ2) and the contract's history on [nearblocks](https://nearblocks.io/address/escrow.sphinxescrow.near).
+The key's attestation is on [OutLayer](https://api.outlayer.ai/attestations/by-tx/FuftJoid1LeD7i4KQp7CdZyeBUphWdPSXKaGhweG5zQ2) and the contract on [nearblocks](https://nearblocks.io/address/escrow.sphinxescrow.near).
 
 ## settings
 

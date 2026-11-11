@@ -374,7 +374,7 @@ pub async fn online_checks(bundle: &Value) -> Result<Report, String> {
         Some(block) => {
             r.push(
                 true,
-                format!("{contract} has since been closed; its state is read from an archival node at block {block}, where the last signed result executed"),
+                format!("{contract} has since been closed or redeployed; this job's state is read from an archival node at block {block}, where its last signed result executed"),
             );
             (rpc_for(contract, true), Some(block))
         }
@@ -487,8 +487,10 @@ async fn check_badges(
 
 /// The SHA-256 of the code `account` runs now, as lowercase hex (the chain
 /// reports it in base58).
-/// `None` while `contract` exists; once it has been deleted, the hash of the
-/// block in which the bundle's last signed result executed.
+/// `None` while `contract` still holds the recorded job; once the contract
+/// has been deleted, or redeployed under the same name so that the job
+/// number now belongs to another job, the hash of the block in which the
+/// bundle's last signed result executed.
 async fn closed_at(contract: &str, bundle: &Value) -> Result<Option<String>, String> {
     let rpc = rpc_for(contract, false);
     let body = serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": "query",
@@ -503,7 +505,15 @@ async fn closed_at(contract: &str, bundle: &Value) -> Result<Option<String>, Str
         .await
         .map_err(|e| format!("view_account {contract}: {e}"))?;
     if reply["error"]["cause"]["name"] != "UNKNOWN_ACCOUNT" {
-        return Ok(None);
+        // Same job only if it was created at the same moment.
+        let job_id = s(&bundle["job"], &["id"]);
+        let live =
+            view_call(&rpc, contract, "get_job", &serde_json::json!({ "job_id": job_id }), None)
+                .await
+                .map_or(Value::Null, |(v, _)| v);
+        if live["created_at_ns"] == bundle["job"]["created_at_ns"] {
+            return Ok(None);
+        }
     }
     let last = bundle["results"].as_array().and_then(|v| v.last()).cloned().unwrap_or(Value::Null);
     let (tx, signer) = (s(&last, &["tx_hash"]), s(&last, &["signer"]));

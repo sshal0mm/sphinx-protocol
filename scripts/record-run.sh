@@ -56,9 +56,16 @@ jq -e '.output_hash' <<<"$ATTESTATION" >/dev/null || { echo "attestation not rea
 # Every signed result posted for this job, from the escrow's transaction list.
 curl -s -X POST "$TXAPI/v0/account" -H 'content-type: application/json' \
   -d "{\"account_id\":\"$CONTRACT\"}" | jq '[.account_txs[] | select(.is_success and .is_function_call) | .transaction_hash]' > "$WORK/hashes.json"
-python3 - "$WORK/hashes.json" "$TXAPI" "$JOB" > "$WORK/results.json" <<'PY'
+# A contract redeployed under the same name starts its job numbers again, so
+# a result counts only when its nonce is the one this job (or submission)
+# was issued.
+echo "$JOBV" > "$WORK/job.json"; echo "$SUBS" > "$WORK/subs.json"
+python3 - "$WORK/hashes.json" "$TXAPI" "$JOB" "$WORK/job.json" "$WORK/subs.json" > "$WORK/results.json" <<'PY'
 import base64, json, sys, urllib.request
 hashes, api, job = json.load(open(sys.argv[1])), sys.argv[2], sys.argv[3]
+jobv, subs = json.load(open(sys.argv[4])), json.load(open(sys.argv[5]))
+check_nonce = (jobv.get("commit") or {}).get("suite_check_nonce")
+sub_nonce = {str(s["sub_id"]): s["nonce"] for s in subs}
 results = []
 for i in range(0, len(hashes), 20):
     req = urllib.request.Request(api + "/v0/transactions", method="POST",
@@ -73,6 +80,9 @@ for i in range(0, len(hashes), 20):
             args = json.loads(base64.b64decode(fc["args"]))
             body = args.get("score") or args.get("check")
             if str(body.get("job_id")) != job:
+                continue
+            want = check_nonce if "check" in args else sub_nonce.get(str(body.get("sub_id")))
+            if body.get("nonce") != want:
                 continue
             results.append({"kind": "score" if "score" in args else "suite_check",
                             "tx_hash": tx["hash"], "signer": tx["signer_id"], "args": args})

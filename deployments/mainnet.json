@@ -2,8 +2,8 @@
   "network": "mainnet",
   "contract": "escrow.sphinxescrow.near",
   "owner": "sphinxescrow.near",
-  "code_sha256": "6679a96e41bda611731b3d8bd4d2761e720721b01d2872d8e03628cf9476cd48",
-  "deploy_tx": "4jpxcd9T5QNZrDL23nLqPzx1LdnM56qTLiHcxQnVxnai",
+  "code_sha256": "19f72965a4cb22bca26203ede178c34f684611c7f24c863aae74b69f0985d399",
+  "deploy_tx": "9ZEtGzxTETVNpUHmPx97pt8us2aNAGKv3ZCnjARjfQc4",
   "verifier": "sphinxescrow.near",
   "fee_bps": 500,
   "allow_dev_keys": false,
@@ -19,7 +19,6 @@
     "registration_tx": "4GogZETrb4XLpcvWaV9q3qdtzvo11WmqaYpPz111HzBH",
     "source_tag": "grader-60ba775f"
   },
-  "upgrade_tx": "9o9ftcv4BmuVuVSNnP12zArnxkbpfeyDrmPCrDyf7GE4",
   "archive": [
     {
       "contract": "escrow.sphinxescrow.near",
@@ -27,7 +26,22 @@
       "code_sha256": "6679a96e41bda611731b3d8bd4d2761e720721b01d2872d8e03628cf9476cd48",
       "deploy_tx": "4jpxcd9T5QNZrDL23nLqPzx1LdnM56qTLiHcxQnVxnai",
       "upgrade_tx": "9o9ftcv4BmuVuVSNnP12zArnxkbpfeyDrmPCrDyf7GE4",
-      "note": "the first mainnet escrow: jobs 0 to 2 (0 and 2 paid with real NEAR on 10 Nov 2026); deleted for the relaunch, its balance returned to the owner"
+      "note": "the first mainnet escrow: jobs 0 to 2 (0 and 2 paid with real NEAR on 10 Nov 2026); deleted for the relaunch, its balance returned to the owner",
+      "closed_tx": "3xmRyUpfyVUQUCzb1sGEGaMXh7Va9L4MrSqZJDrswn6o"
     }
-  ]
+  ],
+  "source": "sshal0mm/sphinx-protocol afcb98a (reproducible build)",
+  "relaunched_at": "2026-11-11",
+  "enclave": {
+    "quote_verifier": "tee-verifier-2026-08-04.near",
+    "measurements_from": "worker.outlayer.near",
+    "grader_caller": "relayer.sphinxescrow.near"
+  },
+  "retire_after": "2026-12-01T00:00:00Z",
+  "setup_txs": {
+    "grader_key": "Bs12Lzx7tXJP9zSjZPpJGe6eNCmqCMQosTbgiVpKTuzT",
+    "sync_measurements": "3tFeBzHAu3Pyonxum17jX7Ghh21H9gxrmEQqYxshRin5",
+    "full_access_key_deleted": "53wfG4vci5D9ku1FoWtuwkAaQ5VGqEox8p7c9mfab5cx"
+  },
+  "access_keys": "none"
 }

@@ -1,11 +1,17 @@
 # Going live on mainnet
 
-**Closed on 11 November 2026.** After its two paid jobs the escrow was
-deleted (transaction `3xmRyUpfyVUQUCzb1sGEGaMXh7Va9L4MrSqZJDrswn6o`) and its
-balance returned to `sphinxescrow.near`. The records in `deployments/runs/`
-still verify: `sphinx verify --online` reads the closed contract from an
-archival node at the block of each payout. What follows is how it was
-deployed.
+**Relaunched on 11 November 2026.** The first escrow paid two jobs and was
+deleted (transaction `3xmRyUpfyVUQUCzb1sGEGaMXh7Va9L4MrSqZJDrswn6o`), its
+balance returned to `sphinxescrow.near`. The same account was then created
+again and runs the reproducible build `19f72965…d399` from
+`sphinx-protocol` `afcb98a`, with the on-chain enclave proof check (deploy
+`9ZEtGzxT…`, grader key `Bs12Lzx7…`, approved images `3tFeBzHA…`). Its only
+full-access key was deleted (`53wfG4vc…`), so it has no keys. After
+1 December the owner's `retire` returns agent deposits, stops new money and
+adds the owner's key, so the owner can clear the state and close the
+account. The records of both contracts verify with
+`sphinx verify --online deployments/runs/mainnet*.json`. What follows is how
+the first contract was deployed.
 
 The same code runs on both networks. Every service picks its network from
 the contract's account name (`.near` is mainnet), and every script from

@@ -39,14 +39,22 @@ Post one with the CLI or MCP like any other job: `sphinx_post_job` with the suit
 
 ## On mainnet
 
-On 10 Nov 2026 two jobs ran on NEAR mainnet, on `escrow.sphinxescrow.near`, with real NEAR; the contract was closed the next day to recover its NEAR. `buyer.sphinxescrow.near` posted them, and Claude on the web solved them through a connector signing as `jonas-web.sphinxescrow.near`. Both accounts are mine: this proves the money path, not outside demand.
+On 10 Nov 2026 two jobs ran on NEAR mainnet, on `escrow.sphinxescrow.near`, with real NEAR; that first contract was closed the next day and replaced (below). `buyer.sphinxescrow.near` posted them, and Claude on the web solved them through a connector signing as `jonas-web.sphinxescrow.near`. Both accounts are mine: this proves the money path, not outside demand.
 
 | Job | What it asks | Hidden tests | Reward | Result | Recorded run |
 |---|---|---|---|---|---|
 | Ethereum address checksums (EIP-55) | checksummed addresses, Keccak-256 written from scratch | 21 | 0.1 NEAR | 21/21, paid | [`mainnet-job0.json`](../deployments/runs/mainnet-job0.json) |
 | Liquidation price for an isolated-margin perp | integer arithmetic | 32 | 0.1 NEAR | 32/32, paid | [`mainnet-job2.json`](../deployments/runs/mainnet-job2.json) |
 
-`sphinx verify --online deployments/runs/mainnet-job*.json` passes on each, reading the closed contract from an archival node at the block of the payout. The EIP-55 job reuses the task and reference of an earlier testnet job, so the first real-money run was a task already proven on testnet, graded by a different hidden suite (suite hash `7e2f3b7c…` on mainnet, `fa35a0e9…` on testnet).
+`sphinx verify --online deployments/runs/mainnet-job*.json` passes on each, reading the first contract from an archival node at the block of the payout.
+
+On 11 Nov 2026 the contract was replaced at the same name by the reproducible build `19f72965…`, which checks each grading run's Intel proof on chain and has no access keys. Three jobs were paid on it, solved by Grok signing as `jonas-web.sphinxescrow.near` from the task text alone:
+
+| Job | Hidden tests | Reward | Result | Submit to paid | Recorded run |
+|---|---|---|---|---|---|
+| Roman numerals to integer | 14 | 0.1 NEAR | 14/14, paid | 26.1 s | [`mainnet2-job0.json`](../deployments/runs/mainnet2-job0.json) |
+| Word count with a strict word rule | 16 | 0.1 NEAR | 16/16, paid | 32.9 s | [`mainnet2-job1.json`](../deployments/runs/mainnet2-job1.json) |
+| Clamp and round prices to cents | 14 | 0.1 NEAR | 14/14, paid | 28.5 s | [`mainnet2-job2.json`](../deployments/runs/mainnet2-job2.json) | The EIP-55 job reuses the task and reference of an earlier testnet job, so the first real-money run was a task already proven on testnet, graded by a different hidden suite (suite hash `7e2f3b7c…` on mainnet, `fa35a0e9…` on testnet).
 
 ## How an AI agent did
 
