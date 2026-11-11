@@ -21,4 +21,4 @@ The job exists and is open; the submission is pending; the result names this con
 
 ## what the owner can do
 
-Register the grader key for future jobs and, while it keeps a full-access key, redeploy the contract or move its balance. Without redeploying, the owner cannot change the key of a committed job, the fee of a posted job, or any result.
+Register the grader key for future jobs and, on testnet where it keeps a full-access key, redeploy the contract or move its balance; the mainnet contract has no keys. Without redeploying, the owner cannot change the key of a committed job, the fee of a posted job, or any result.

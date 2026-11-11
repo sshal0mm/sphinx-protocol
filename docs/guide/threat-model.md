@@ -18,7 +18,7 @@ Who might attack, what stops them, and what is left.
 | a score no enclave produced | the run's Intel quote is checked on chain by NEAR's verifier before the score counts | trust in Intel and OutLayer's approved images |
 | a score replayed elsewhere | per-submission nonce, contract id and code hash in the message | none known |
 | a buyer collects bonds with an unfair suite | failed bonds are kept by the contract, never paid to the buyer; `bond × attempts ≤ reward` | bounded loss for agents |
-| the owner swaps the grader key mid-job | the key is frozen into the job | redeploy, while the owner keeps a full-access key |
+| the owner swaps the grader key mid-job | the key is frozen into the job | on testnet, a redeploy with the owner's full-access key; the mainnet contract has no keys |
 | the relayer withholds results | anyone may post a signed result, though only the relayer can obtain one; bonds reclaimable, rewards refundable | delay up to the grading window, and a withheld score can change who wins |
 | a buyer reads code and never pays | code is served only once scored | code agents host elsewhere |
 | code is swapped after submission | addressed by SHA-256, checked by the relayer and grader | none known |
