@@ -54,6 +54,9 @@ demo-local: ## The grading story offline: no network, no keys
 demo-verify: ## Check every recorded job in deployments/runs offline: registration, signed results, payout (no keys, no network)
 	cargo run -q -p sphinx-cli -- verify deployments/runs/*.json
 
+record-replay: ## Record one paid job step by step from the chain for the /replay page: make record-replay RUN=mainnet2-job0
+	python3 scripts/record-replay.py deployments/runs/$(RUN).json > deployments/replays/$(RUN).json
+
 runs-doc: ## Regenerate docs/RUNS.md (every recorded submission, its result, seconds to settle and its transaction) from deployments/runs
 	scripts/runs-doc.sh
 

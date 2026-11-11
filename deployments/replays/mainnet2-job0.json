@@ -1,0 +1,90 @@
+{
+ "schema": "sphinx.replay/1",
+ "network": "mainnet",
+ "contract": "escrow.sphinxescrow.near",
+ "job_id": "0",
+ "title": "Roman numerals to integer",
+ "buyer": "buyer.sphinxescrow.near",
+ "agent": "jonas-web.sphinxescrow.near",
+ "reward": "100000000000000000000000",
+ "explorer": "https://nearblocks.io/txns/",
+ "run_record": "mainnet2-job0.json",
+ "steps": [
+  {
+   "tx": "CrZLxLgR1DKUuc9B52f1J1VdpSE662hmD3uS6RU1zNsk",
+   "signer": "buyer.sphinxescrow.near",
+   "receiver": "escrow.sphinxescrow.near",
+   "method": "post_job",
+   "at_ns": "1794390205427695369"
+  },
+  {
+   "tx": "4GpEWmDjoeUe4HLy1fbJCBWXS1ynwhT5oNJd8ahH5aDa",
+   "signer": "buyer.sphinxescrow.near",
+   "receiver": "escrow.sphinxescrow.near",
+   "method": "commit_suite",
+   "at_ns": "1794390214515485863"
+  },
+  {
+   "tx": "DdxXqX45jrKknY6jjknWQqps5dcaZdPhvBCctxdShMKo",
+   "signer": "buyer.sphinxescrow.near",
+   "receiver": "outlayer.near",
+   "method": "store_secrets",
+   "at_ns": "1794390224182107500"
+  },
+  {
+   "tx": "8YmJNdpxiHYwvvNTXrpM7tZLwSQ4fUWmbmDzdP6mRUWu",
+   "signer": "relayer.sphinxescrow.near",
+   "receiver": "outlayer.near",
+   "method": "request_execution",
+   "at_ns": "1794390228216318254",
+   "done_ns": "1794390245736747800"
+  },
+  {
+   "tx": "HSfm3LnMB6ynPvZtiHjht6gXhXaFEziZBA5uHbCBTxw1",
+   "signer": "relayer.sphinxescrow.near",
+   "receiver": "escrow.sphinxescrow.near",
+   "method": "confirm_run",
+   "at_ns": "1794390249130849030",
+   "for": "tests"
+  },
+  {
+   "tx": "95icCApQmESbGZQSj4hFf8HYfPPWpJjTvKWbEFHZyW5W",
+   "signer": "relayer.sphinxescrow.near",
+   "receiver": "escrow.sphinxescrow.near",
+   "method": "record_suite_check",
+   "at_ns": "1794390255878576784"
+  },
+  {
+   "tx": "8Fhv31NxrJTXjB11DiH5HQee5fVwy9A7aLXSsHWL39t1",
+   "signer": "jonas-web.sphinxescrow.near",
+   "receiver": "escrow.sphinxescrow.near",
+   "method": "submit",
+   "at_ns": "1794390554266297876"
+  },
+  {
+   "tx": "62rGv6DDEPKCubTG1Uzxr6mbjqYwr8qpk75EGgAdzz7T",
+   "signer": "relayer.sphinxescrow.near",
+   "receiver": "outlayer.near",
+   "method": "request_execution",
+   "at_ns": "1794390557877244610",
+   "done_ns": "1794390572483920038"
+  },
+  {
+   "tx": "4JprCMvmM1xNHk5X5apvduf1JLDXf6tuVn8tvp96x3we",
+   "signer": "relayer.sphinxescrow.near",
+   "receiver": "escrow.sphinxescrow.near",
+   "method": "confirm_run",
+   "at_ns": "1794390575916250144",
+   "for": "submission"
+  },
+  {
+   "tx": "CxAaWAKrhbCJCxcNrm1Y93uBqLhts8J6sA4nBkQbu4RB",
+   "signer": "relayer.sphinxescrow.near",
+   "receiver": "escrow.sphinxescrow.near",
+   "method": "record_score",
+   "at_ns": "1794390580325915135",
+   "passed": 14,
+   "total": 14
+  }
+ ]
+}

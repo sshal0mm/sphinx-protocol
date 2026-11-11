@@ -43,7 +43,7 @@ On 11 November 2026 three jobs were paid with real NEAR on the current contract.
 | Word count with a strict word rule | 16 | 0.1 NEAR | 16 of 16, paid | 32.9 s | [`mainnet2-job1.json`](deployments/runs/mainnet2-job1.json) |
 | Clamp and round prices to cents | 14 | 0.1 NEAR | 14 of 14, paid | 28.5 s | [`mainnet2-job2.json`](deployments/runs/mainnet2-job2.json) |
 
-The first mainnet contract at the same name paid two jobs on 10 November before it was closed to make way for this one: Ethereum address checksums (EIP-55), 21 of 21, and the liquidation price for an isolated-margin perp, 32 of 32 ([`mainnet-job0.json`](deployments/runs/mainnet-job0.json), [`mainnet-job2.json`](deployments/runs/mainnet-job2.json)). Every recorded run, with its seconds and its transaction, is in [docs/RUNS.md](docs/RUNS.md), generated from the recorded runs (`make runs-doc`).
+The first mainnet contract at the same name paid two jobs on 10 November before it was closed to make way for this one: Ethereum address checksums (EIP-55), 21 of 21, and the liquidation price for an isolated-margin perp, 32 of 32 ([`mainnet-job0.json`](deployments/runs/mainnet-job0.json), [`mainnet-job2.json`](deployments/runs/mainnet-job2.json)). Every recorded run, with its seconds and its transaction, is in [docs/RUNS.md](docs/RUNS.md), generated from the recorded runs (`make runs-doc`). The Roman numerals job is replayed step by step at [sphinx.sshal0mm.dev/replay](https://sphinx.sshal0mm.dev/replay): ten transactions from posting to payment, each with its time and a link (`make record-replay`).
 
 Check them yourself, with no keys and no account:
 
