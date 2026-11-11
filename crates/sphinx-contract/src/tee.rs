@@ -63,8 +63,8 @@ struct RunOutput {
 }
 
 /// One entry of OutLayer's approved image list; other fields are ignored.
-#[derive(Debug, Deserialize)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers = [json])]
+#[derive(Debug)]
 pub struct ListedImage {
     mrtd: Option<String>,
     rtmr0: Option<String>,
