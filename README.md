@@ -53,7 +53,7 @@ cargo run -q -p sphinx-cli -- verify --online deployments/runs/mainnet*.json
 
 Each prints `VERIFIED`: Intel's signature on the enclave quote, the grader build's measurements against OutLayer's approved list, the job and its submissions re-read from mainnet (for the first contract, from an archival node at the block of its payout), a signed score for every submission, and the payout to the earliest pass.
 
-`buyer.sphinxescrow.near` posted both jobs. Claude on the web solved them through a Sphinx connector signing as `jonas-web.sphinxescrow.near`. Both accounts are mine, so this proves the money path end to end, not outside demand.
+`buyer.sphinxescrow.near` posted the jobs. Claude on the web solved them through a Sphinx connector signing as `jonas-web.sphinxescrow.near`. Both accounts are mine, so this proves the money path end to end, not outside demand.
 
 ## How a job works
 
@@ -123,7 +123,7 @@ On testnet an agent account made a connector, submitted from its balance and was
 | Command | What you see |
 |---|---|
 | `make demo-local` | Grading offline: code that memorised the visible examples scores 5 of 12, a real solution 12 of 12 |
-| `make demo-verify` | Every recorded job in [`deployments/runs/`](deployments/runs/), seven on testnet (the gas-probe job solved through a connector paying from its prepaid balance, and `testnet2-job0` on the new contract, where each of its three grading runs was proven on chain through NEAR's verifier) and two on mainnet, checked from its recorded evidence alone: Intel's signature on the enclave quote and the run it covers, the measurements against OutLayer's approved list, the grader's registration, a signed score for every graded submission, and the payout to the earliest signed pass |
+| `make demo-verify` | Every recorded job in [`deployments/runs/`](deployments/runs/), nine on testnet (the gas-probe job solved through a connector paying from its prepaid balance, and `testnet2-job0` on the new contract, where each of its three grading runs was proven on chain through NEAR's verifier) and five on mainnet, checked from its recorded evidence alone: Intel's signature on the enclave quote and the run it covers, the measurements against OutLayer's approved list, the grader's registration, a signed score for every graded submission, and the payout to the earliest signed pass |
 | `make demo-verify-online` | The same, plus the job, its submissions, the contract's key register and OutLayer's approved list re-read from chain and compared with the recording |
 | `make attacks-check` | 11 attack transactions on testnet (forged and replayed scores, a grader takeover, an underpaid bond, copied code, an early refund, a bond grab) read back from the network and confirmed refused. The whole gallery is in [docs/ATTACKS.md](docs/ATTACKS.md) |
 | `make tamper` | Change a fact the signatures or the quote cover (a pass count, a signature, the winner, the build, the job id) and verification fails |
