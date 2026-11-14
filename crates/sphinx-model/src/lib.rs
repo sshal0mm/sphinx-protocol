@@ -9,6 +9,9 @@
 //! provider sees every request. [`Scripted`] returns fixed replies for tests.
 
 pub mod attest;
+pub mod pool;
+
+pub use pool::Pool;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -125,6 +128,35 @@ impl NearAiCloud {
                 .build()
                 .unwrap_or_else(|_| reqwest::Client::new()),
         }
+    }
+
+    /// Another model on the same gateway with the same key, checked on its
+    /// own: its privacy and attestation start unconfirmed.
+    #[must_use]
+    pub fn sibling(&self, model: String) -> Self {
+        let mut other = Self::new(self.base_url.clone(), self.api_key.clone(), model);
+        other.thinking = self.thinking;
+        other
+    }
+
+    /// The same model on the same gateway with another key, checked on its
+    /// own.
+    #[must_use]
+    pub fn with_key(&self, key: &str) -> Self {
+        let mut other = Self::new(self.base_url.clone(), key, self.model.clone());
+        other.thinking = self.thinking;
+        other
+    }
+
+    /// Whether this client uses `key`.
+    pub fn has_key(&self, key: &str) -> bool {
+        self.api_key == key
+    }
+
+    /// The key's last four characters, for the log; never the key.
+    pub fn key_hint(&self) -> String {
+        let n = self.api_key.chars().count();
+        format!("…{}", self.api_key.chars().skip(n.saturating_sub(4)).collect::<String>())
     }
 
     /// Lets a reasoning model think before answering.
@@ -306,7 +338,14 @@ impl NearAiCloud {
     fn body(&self, messages: &[Message]) -> serde_json::Value {
         let mut body = json!({ "model": self.model, "messages": messages, "temperature": 0.2 });
         if !self.thinking && self.is_gateway() {
-            body["chat_template_kwargs"] = json!({ "thinking": false });
+            // DeepSeek's template reads `thinking`; Qwen's and GLM's read
+            // `enable_thinking`. Templates ignore the switch they do not use.
+            body["chat_template_kwargs"] = json!({ "thinking": false, "enable_thinking": false });
+            // GLM 5.3 Flash ignores both and reasons anyway unless the
+            // effort is low (NEAR AI's reasoning-models guide).
+            if self.model.starts_with("z-ai/glm") {
+                body["reasoning_effort"] = json!("low");
+            }
         }
         body
     }

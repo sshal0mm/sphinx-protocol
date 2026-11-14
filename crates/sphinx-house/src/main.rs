@@ -12,6 +12,8 @@
 //! - `HOUSE_SUGGESTED_REWARD_NEAR` (0.5), `HOUSE_BOND_NEAR` (0.01),
 //!   `HOUSE_DEADLINE_HOURS` (48), `HOUSE_DRAFTING_FEE_NEAR` (0.05)
 //! - `HOUSE_SWAP_FEE_BPS` (50), `HOUSE_SWAP_FEE_ACCOUNT` (the fee account on mainnet)
+//! - `HOUSE_ONE_CLICK_KEY`: a NEAR Intents 1Click partner key (optional;
+//!   without one 1Click adds 0.25% to every swap)
 //! - `HOUSE_DRAFTS_PER_VISITOR` (3), `HOUSE_DRAFTS_PER_DAY` (40)
 #![allow(clippy::print_stderr, reason = "startup and fatal errors go to stderr")]
 
@@ -41,8 +43,7 @@ async fn main() -> std::process::ExitCode {
 }
 
 async fn run() -> Result<(), String> {
-    let model =
-        sphinx_model::NearAiCloud::from_env().ok_or("set SPHINX_MODEL_KEY for the concierge")?;
+    let model = sphinx_model::Pool::from_env().ok_or("set SPHINX_MODEL_KEY for the concierge")?;
     // Drafting waits until the model is confirmed private; the rest of the
     // box (quotes, published tests, payments in flight) runs meanwhile.
     if !model.confirm_privacy().await {
@@ -91,14 +92,26 @@ async fn run() -> Result<(), String> {
         drafts_per_day: number("HOUSE_DRAFTS_PER_DAY", 40),
     };
     let dir = std::path::PathBuf::from(env("HOUSE_DIR", "data/house"));
+    let intents = Arc::new(sphinx_house::intents::Intents::new(
+        &at.one_click,
+        std::env::var("HOUSE_ONE_CLICK_KEY").ok(),
+        terms.swap_fee_bps,
+        terms.swap_fee_account.clone(),
+        mainnet,
+        at.rpc.clone(),
+        at.rpc_key.clone(),
+    ));
     let house = Arc::new(House::new(model, at, dir, terms, caps));
     let checker = house.clone();
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(std::time::Duration::from_secs(300));
         loop {
             tick.tick().await;
-            if !checker.model.is_private() && checker.model.confirm_privacy().await {
-                eprintln!("drafting resumed: the model is confirmed private");
+            // A model that was down or unconfirmed at start is checked
+            // again, so it can take over when the one in use fails.
+            let paused = !checker.model.is_private();
+            if !checker.model.all_private() && checker.model.confirm_privacy().await && paused {
+                eprintln!("drafting resumed: {}", checker.model.privacy_note());
             }
         }
     });
@@ -115,5 +128,6 @@ async fn run() -> Result<(), String> {
     let listener =
         tokio::net::TcpListener::bind(&addr).await.map_err(|e| format!("{addr}: {e}"))?;
     eprintln!("sphinx-house listening on http://{addr}");
-    axum::serve(listener, router(house)).await.map_err(|e| e.to_string())
+    let routes = router(house).merge(sphinx_house::intents::router(intents));
+    axum::serve(listener, routes).await.map_err(|e| e.to_string())
 }

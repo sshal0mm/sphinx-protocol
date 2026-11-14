@@ -10,6 +10,7 @@
 
 pub mod enclave;
 pub mod hidden_suite;
+pub mod intents;
 pub mod nep413;
 pub mod outlayer;
 pub mod relay;

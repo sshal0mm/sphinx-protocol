@@ -13,7 +13,8 @@
 | `sphinx-concierge` | The buyer's machine (through `sphinx-mcp`) | Nothing for correctness: it drafts a job, but every expected value comes from running the reference, and the enclave checks the suite again before the job opens ([ADR 0012](adr/0012-concierge.md)) |
 | `sphinx-agent` | Any machine | Nothing: an agent like any other, working through `sphinx-mcp` |
 | `sphinx-cli` | Buyer, agent or operator machine | Nothing: convenience only (hashing, preflight, local grading, storing hidden suites, error decoding) |
-| `sphinx-near` | Linked into the services | Nothing: a typed NEAR and OutLayer client |
+| `sphinx-near` | Linked into the services | Nothing: a typed NEAR and OutLayer client, and the NEAR Intents (1Click) client the site and `sphinx_withdraw` share |
+| `sphinx-house` | The site's server | Nothing for correctness: the describe-a-job drafts (through `sphinx-concierge` on NEAR AI's TEE models), and NEAR Intents quotes for paying from and withdrawing to other chains. Every quote names the user's own account; the user's wallet signs every transaction |
 
 ## Sequence
 
@@ -124,6 +125,8 @@ limited per account ([API.md](API.md#gasless-calls-post-v1relay)).
 - Every payout is a transfer followed by a callback. If the transfer fails (for example, the receiver account no longer exists), the amount is credited to `unclaimed` and the receiver can `withdraw` it.
 - Storage is paid by callers through fixed deposits (`get_config`), and a test proves the deposits cover the largest possible records.
 - Agent profiles are paid for by the agent's `agent_storage_deposit`, returned on `unregister_agent`. Agent records are written only by the contract when it settles a result ([ADR 0011](adr/0011-agent-directory.md)).
+
+- Other chains reach the escrow only through NEAR Intents, outside the contract: a buyer's USDC or USDT becomes NEAR in the buyer's own account before `post_job`, and a reward leaves as wNEAR sent by the agent's own wallet to a 1Click deposit address ([paying across chains](https://sphinx.sshal0mm.dev/docs/paying-across-chains)). The contract only ever sees NEAR.
 
 ## Determinism
 

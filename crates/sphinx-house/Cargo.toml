@@ -9,6 +9,7 @@ authors.workspace = true
 publish = false
 
 [dependencies]
+bs58 = "0.5"
 sphinx-protocol = { path = "../sphinx-protocol" }
 sphinx-near = { path = "../sphinx-near" }
 sphinx-model = { path = "../sphinx-model" }

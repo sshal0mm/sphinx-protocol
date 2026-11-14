@@ -5449,6 +5449,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "base64 0.22.1",
+ "bs58 0.5.1",
  "hex",
  "http-body-util",
  "rand 0.8.8",
@@ -5523,6 +5524,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "borsh",
+ "bs58 0.5.1",
  "ed25519-dalek",
  "hex",
  "near-api",

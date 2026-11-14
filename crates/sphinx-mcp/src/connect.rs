@@ -20,6 +20,12 @@
 //!    someone watching the chain from finishing first. Each claim is used
 //!    once, and each key gets at most one connector.
 //!
+//! 4. Coming back later, `POST /connect/status {account}` says whether the
+//!    account has a live connector (its limited key is public on chain
+//!    anyway), and `POST /connect/mine {auth}` returns its address once the
+//!    owner proves the account with a NEP-413 message signed by one of its
+//!    full-access keys, so a returning owner never needs a second key.
+//!
 //! The server keeps only the limited key. It can submit work paid from the
 //! prepaid balance, collect, settle and reclaim; it cannot move the account's
 //! money anywhere else. The owner revokes it by deleting the key in their
@@ -72,6 +78,10 @@ struct Saved {
     account: String,
     secret_key: String,
     public_key: String,
+    /// When it was made (unix seconds); 0 for connectors made before this
+    /// was kept.
+    #[serde(default)]
+    created_s: u64,
 }
 
 struct Pending {
@@ -103,6 +113,9 @@ pub struct Connect {
     http: reqwest::Client,
     pending: Mutex<HashMap<String, Pending>>,
     starts: Mutex<HashMap<String, (Instant, u32)>>,
+    /// Signed messages already used, (account, nonce) → when, so a copied
+    /// one cannot be replayed while it is fresh.
+    seen: Mutex<HashMap<(String, String), u64>>,
     saved: Mutex<HashMap<String, Saved>>,
     services: Mutex<HashMap<String, Service>>,
 }
@@ -125,6 +138,15 @@ struct StartBody {
 const CLIENT_HEADER: &str = "x-sphinx-client";
 /// Sign-ups one visitor may start in an hour.
 const STARTS_PER_CLIENT: u32 = 10;
+
+#[derive(Deserialize)]
+struct MineBody {
+    /// The `x-sphinx-auth` value: a NEP-413 [`connector_message`] signed
+    /// by a full-access key of the account.
+    ///
+    /// [`connector_message`]: sphinx_near::nep413::connector_message
+    auth: String,
+}
 
 #[derive(Deserialize)]
 struct FinishBody {
@@ -214,6 +236,7 @@ impl Connect {
             http: reqwest::Client::new(),
             pending: Mutex::new(HashMap::new()),
             starts: Mutex::new(HashMap::new()),
+            seen: Mutex::new(HashMap::new()),
             saved: Mutex::new(saved),
             services: Mutex::new(HashMap::new()),
         })
@@ -224,6 +247,8 @@ impl Connect {
         Router::new()
             .route("/connect/start", post(start))
             .route("/connect/finish", post(finish))
+            .route("/connect/status", post(status))
+            .route("/connect/mine", post(mine))
             .route("/mcp/{network}/{token}", any(serve))
             .with_state(self)
     }
@@ -291,6 +316,34 @@ impl Connect {
         v["result"]["result"].is_array()
     }
 
+    /// The account's connectors whose key is still on chain with a
+    /// connector's permission, newest first, as (token, saved).
+    async fn live(&self, account: &str) -> Result<Vec<(String, Saved)>, String> {
+        let mut mine: Vec<(String, Saved)> = match self.saved.lock() {
+            Ok(all) => all
+                .iter()
+                .filter(|(_, s)| s.account == account)
+                .map(|(t, s)| (t.clone(), s.clone()))
+                .collect(),
+            Err(_) => return Err("busy".to_owned()),
+        };
+        mine.sort_by_key(|m| std::cmp::Reverse(m.1.created_s));
+        let mut out = Vec::new();
+        for (token, saved) in mine {
+            // A key the owner deleted ends its connector.
+            if let Some(p) = self.access_key(account, &saved.public_key).await? {
+                if permission_ok(&p, self.contract.as_str()) {
+                    out.push((token, saved));
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    fn address(&self, token: &str) -> String {
+        format!("{}/mcp/{}/{token}", self.public_base, self.network)
+    }
+
     /// Counts a start by `client`; false once it has started too many this hour.
     fn admit(&self, client: &str) -> bool {
         let Ok(mut starts) = self.starts.lock() else { return false };
@@ -298,6 +351,14 @@ impl Connect {
         let entry = starts.entry(client.to_owned()).or_insert((Instant::now(), 0));
         entry.1 += 1;
         entry.1 <= STARTS_PER_CLIENT
+    }
+
+    /// Records a signed message's nonce; false if it was used before.
+    fn first_use(&self, account: &str, nonce: &str, now_ms: u64) -> bool {
+        let Ok(mut seen) = self.seen.lock() else { return false };
+        let window = sphinx_near::nep413::MAX_AGE_MS + 60_000;
+        seen.retain(|_, at| now_ms.saturating_sub(*at) <= window);
+        seen.insert((account.to_owned(), nonce.to_owned()), now_ms).is_none()
     }
 
     /// Takes the waiting connection for `public_key` if `account` and `claim`
@@ -452,6 +513,7 @@ async fn finish(State(c): State<Arc<Connect>>, Json(b): Json<FinishBody>) -> Res
         account: b.account.clone(),
         secret_key: p.secret_key,
         public_key: b.public_key.clone(),
+        created_s: now_s(),
     };
     {
         let Ok(mut all) = c.saved.lock() else {
@@ -472,9 +534,63 @@ async fn finish(State(c): State<Arc<Connect>>, Json(b): Json<FinishBody>) -> Res
     Json(json!({
         "ok": true,
         "account": b.account,
-        "connector": format!("{}/mcp/{}/{token}", c.public_base, c.network),
+        "connector": c.address(&token),
     }))
     .into_response()
+}
+
+fn now_s() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
+}
+
+/// Whether `account` has a live connector. Says nothing secret: a
+/// connector's limited key is public on the account.
+async fn status(State(c): State<Arc<Connect>>, Json(b): Json<StartBody>) -> Response {
+    if b.account.parse::<AccountId>().is_err() {
+        return refuse(StatusCode::UNPROCESSABLE_ENTITY, "not a NEAR account id");
+    }
+    match c.live(&b.account).await {
+        Ok(live) => {
+            Json(json!({ "ok": true, "account": b.account, "has_connector": !live.is_empty() }))
+                .into_response()
+        }
+        Err(e) => refuse(StatusCode::BAD_GATEWAY, &format!("{e}; try again in a moment")),
+    }
+}
+
+/// The signer's live connectors, newest first, for its owner only: the
+/// message must be signed by a full-access key of the account, fresh, and
+/// used once.
+async fn mine(State(c): State<Arc<Connect>>, Json(b): Json<MineBody>) -> Response {
+    let now_ms = now_s().saturating_mul(1000);
+    let Ok(m) = sphinx_near::nep413::verify_connector_header(&b.auth, c.network, now_ms) else {
+        return refuse(StatusCode::UNAUTHORIZED, "the signed message was not accepted; sign again");
+    };
+    match c.access_key(&m.account_id, &m.public_key).await {
+        Ok(Some(p)) if p == json!("FullAccess") => {}
+        Ok(_) => {
+            return refuse(
+                StatusCode::UNAUTHORIZED,
+                "sign with your wallet's own key; a limited key cannot show connectors",
+            );
+        }
+        Err(e) => return refuse(StatusCode::BAD_GATEWAY, &format!("{e}; try again in a moment")),
+    }
+    if !c.first_use(&m.account_id, &m.nonce, now_ms) {
+        return refuse(
+            StatusCode::UNAUTHORIZED,
+            "this signed message was already used; sign again",
+        );
+    }
+    match c.live(&m.account_id).await {
+        Ok(live) => Json(json!({
+            "ok": true,
+            "account": m.account_id,
+            "connectors": live.iter().map(|(t, _)| c.address(t)).collect::<Vec<_>>(),
+        }))
+        .into_response(),
+        Err(e) => refuse(StatusCode::BAD_GATEWAY, &format!("{e}; try again in a moment")),
+    }
 }
 
 async fn serve(
@@ -548,6 +664,20 @@ mod tests {
         // The owner's page finishes it, once; a racing second finish gets nothing.
         assert!(c.take_pending("kemi.testnet", "ed25519:K", "secret-claim").is_some());
         assert!(c.take_pending("kemi.testnet", "ed25519:K", "secret-claim").is_none());
+    }
+
+    #[test]
+    fn a_signed_message_shows_connectors_once() {
+        let c = server();
+        assert!(c.first_use("kemi.testnet", "n1", 1_000));
+        assert!(!c.first_use("kemi.testnet", "n1", 2_000));
+        assert!(c.first_use("kemi.testnet", "n2", 2_000));
+        // Long after the message went stale, the nonce is forgotten.
+        assert!(c.first_use(
+            "kemi.testnet",
+            "n1",
+            1_000 + sphinx_near::nep413::MAX_AGE_MS + 120_000
+        ));
     }
 
     #[test]

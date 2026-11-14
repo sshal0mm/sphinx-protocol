@@ -19,10 +19,14 @@
 //!   then clears the reference and keeps the tests until the job ends (plus
 //!   seven days unless the buyer publishes them).
 //! - `GET /newcomer/{id}/quote/{chain}`: what the job would cost in USDC
-//!   from another chain, a dry NEAR Intents 1Click price quote. Paying this
-//!   way is not built: nothing is swapped.
+//!   from another chain, a dry NEAR Intents 1Click price quote.
+//! - `/newcomer/intents/*` ([`intents`]): pay with USDC or USDT from another
+//!   chain (the NEAR arrives in the buyer's own account through NEAR
+//!   Intents), and cash NEAR out to another chain.
 //!
 //! The winning code is read by the buyer's wallet (NEP-413), like any buyer.
+
+pub mod intents;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -223,6 +227,19 @@ pub struct Endpoints {
     pub relayer: AccountId,
     /// 1Click, for USDC quotes.
     pub one_click: String,
+}
+
+/// Whether a draft failed because no model answered, not because of the
+/// request.
+fn model_down(why: &str) -> bool {
+    [
+        "NEAR AI Cloud answered 5",
+        "NEAR AI Cloud answered 429",
+        "NEAR AI Cloud request failed",
+        "no drafting model is confirmed",
+    ]
+    .iter()
+    .any(|m| why.contains(m))
 }
 
 /// The house: its model, and the visitors' requests.
@@ -481,13 +498,16 @@ impl<M: Model + Send + Sync + 'static> House<M> {
                             }
                         }
                     }
-                    eprintln!("draft {id} failed: {}", e.message());
+                    let why = e.message();
+                    eprintln!("draft {id} failed: {why}");
+                    let error = if model_down(why) {
+                        "the drafting model on NEAR AI Cloud is down right now; nothing was charged and this try does not count, so start again in a few minutes"
+                    } else {
+                        "the draft could not be finished this time; nothing was charged and this try does not count, so describe the job again or reword it"
+                    };
                     house.update(&id, |r| {
                         r.stage = Stage::Failed;
-                        r.error = Some(
-                            "the draft could not be finished this time; nothing was charged and this try does not count, so describe the job again or reword it"
-                                .to_owned(),
-                        );
+                        r.error = Some(error.to_owned());
                     });
                 }
             }

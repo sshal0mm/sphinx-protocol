@@ -350,6 +350,7 @@ impl<'a, M: Model> Concierge<'a, M> {
     ) -> Result<(Written, Vec<Value>), SphinxError> {
         let mut last = String::from("the model never answered");
         let mut nudged = false;
+        let mut nudged_null = false;
         for round in 1..=WRITE_ROUNDS {
             progress(Progress::Writing { round });
             let reply = self.ask(conversation).await?;
@@ -390,6 +391,34 @@ impl<'a, M: Model> Concierge<'a, M> {
                         .to_owned(),
                 ));
                 continue;
+            }
+            // A suite where the shown examples, or most tests, return null
+            // tests only the invalid-input path; the usual cause is an
+            // argument list that is not wrapped (`[{..}, {..}]` passed as
+            // three arguments instead of `[[{..}, {..}]]` as one array).
+            if failures.is_empty() && !nudged_null {
+                let null = |r: &Evaluation| matches!(r, Evaluation::Returned(Value::Null));
+                let nulls = results.iter().filter(|r| null(r)).count();
+                let example_nulls: Vec<String> = written
+                    .examples
+                    .iter()
+                    .filter(|&&i| results.get(i).is_some_and(null))
+                    .map(|&i| call_text(&written.entry, &written.inputs[i]))
+                    .collect();
+                if !example_nulls.is_empty() || nulls * 2 > results.len() {
+                    nudged_null = true;
+                    conversation.push(Message::user(format!(
+                        "Your reference returns null for {nulls} of {} inputs, including these shown examples:\n{}\n\
+                         Each entry of `inputs` is the full argument list: a function that takes one array \
+                         is called as [[item, item]], not [item, item]. Most tests and every shown example \
+                         must exercise the normal path, with only a few invalid inputs. Fix the inputs \
+                         (or the reference) and reply with the complete JSON object; if null really is the \
+                         right answer for them, reply with the same JSON object again.",
+                        results.len(),
+                        if example_nulls.is_empty() { "(none)".to_owned() } else { example_nulls.join("\n") }
+                    )));
+                    continue;
+                }
             }
             if failures.is_empty() {
                 let outputs = results
@@ -653,6 +682,32 @@ mod tests {
         let score = sphinx_grader::local_score(&d.suite, &d.reference, 0).unwrap();
         assert_eq!(score.passed, 14);
         assert!(seen.contains(&Progress::Compared { agreed: 14, total: 14 }));
+    }
+
+    #[tokio::test]
+    async fn a_suite_that_mostly_returns_null_is_sent_back_once() {
+        // `sum(list)` takes one array; the first draft passes the numbers as
+        // separate arguments, so every call returns null.
+        let reference = "function sum(xs){ if (!Array.isArray(xs)) return null; return xs.reduce((a, b) => a + b, 0) }";
+        let draft = |wrapped: bool| {
+            let inputs: Vec<Value> = (0..14)
+                .map(|n| if wrapped { json!([[n, n + 1]]) } else { json!([n, n + 1]) })
+                .collect();
+            json!({ "title": "Sum", "description": "Write `function sum(xs)`.", "entry": "sum",
+                    "reference": reference, "inputs": inputs, "examples": [0, 1, 2] })
+            .to_string()
+        };
+        let model = Scripted::new([
+            draft(false),
+            draft(true),
+            json!({ "entry": "sum", "code": reference }).to_string(),
+        ]);
+        let d = Concierge::new(&model).draft("sum a list", &mut |_| {}).await.unwrap();
+        assert!(d.spec.contains("sum([0,1]) // 1"), "{}", d.spec);
+        let fix = &model.seen.lock().unwrap()[1];
+        let note = &fix.last().unwrap().content;
+        assert!(note.contains("returns null for 14 of 14 inputs"), "{note}");
+        assert!(note.contains("[[item, item]]"), "{note}");
     }
 
     #[tokio::test]

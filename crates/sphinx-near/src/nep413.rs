@@ -61,6 +61,12 @@ pub fn code_message(code_hash: &str, now_ms: u64) -> String {
     format!("sphinx:code:{code_hash}:{now_ms}")
 }
 
+/// The message for showing the connectors of the signing account on
+/// `network` at `now_ms`.
+pub fn connector_message(network: &str, now_ms: u64) -> String {
+    format!("sphinx:connector:{network}:{now_ms}")
+}
+
 /// Signs `message` as `account` and returns the header value.
 pub fn sign_header(account: &str, key: &SecretKey, message: &str, nonce: [u8; 32]) -> String {
     let signature = key.sign(payload_hash(message, nonce, RECIPIENT));
@@ -108,6 +114,24 @@ pub fn verify_code_header(
     code_hash: &str,
     now_ms: u64,
 ) -> Result<SignedMessage, Refused> {
+    verify_header(value, &format!("code:{code_hash}"), now_ms)
+}
+
+/// Like [`verify_code_header`], for a message asking for the signer's
+/// connectors on `network` ([`connector_message`]).
+///
+/// # Errors
+/// Why the header was refused.
+pub fn verify_connector_header(
+    value: &str,
+    network: &str,
+    now_ms: u64,
+) -> Result<SignedMessage, Refused> {
+    verify_header(value, &format!("connector:{network}"), now_ms)
+}
+
+/// Checks a header whose message is `sphinx:<subject>:<unix time in ms>`.
+fn verify_header(value: &str, subject: &str, now_ms: u64) -> Result<SignedMessage, Refused> {
     let raw =
         base64::engine::general_purpose::STANDARD.decode(value).map_err(|_| Refused::Malformed)?;
     let m: SignedMessage = serde_json::from_slice(&raw).map_err(|_| Refused::Malformed)?;
@@ -124,15 +148,13 @@ pub fn verify_code_header(
     if !signature.verify(payload_hash(&m.message, nonce, &m.recipient), key) {
         return Err(Refused::BadSignature);
     }
-    let rest = m
+    let at = m
         .message
-        .strip_prefix("sphinx:code:")
-        .and_then(|r| r.split_once(':'))
+        .strip_prefix("sphinx:")
+        .and_then(|r| r.strip_prefix(subject))
+        .and_then(|r| r.strip_prefix(':'))
         .ok_or(Refused::WrongMessage)?;
-    if rest.0 != code_hash {
-        return Err(Refused::WrongMessage);
-    }
-    let at: u64 = rest.1.parse().map_err(|_| Refused::WrongMessage)?;
+    let at: u64 = at.parse().map_err(|_| Refused::WrongMessage)?;
     if at > now_ms.saturating_add(60_000) || now_ms.saturating_sub(at) > MAX_AGE_MS {
         return Err(Refused::Stale);
     }
@@ -168,6 +190,17 @@ mod tests {
         let forged =
             base64::engine::general_purpose::STANDARD.encode(serde_json::to_vec(&forged).unwrap());
         assert_eq!(verify_code_header(&forged, &hash, now), Err(Refused::BadSignature));
+    }
+
+    #[test]
+    fn a_connector_request_is_bound_to_its_network_and_never_reads_code() {
+        let now = 1_800_000_000_000;
+        let h = sign_header("agent.near", &key(), &connector_message("mainnet", now), [9; 32]);
+        assert_eq!(verify_connector_header(&h, "mainnet", now).unwrap().account_id, "agent.near");
+        assert_eq!(verify_connector_header(&h, "testnet", now), Err(Refused::WrongMessage));
+        assert_eq!(verify_code_header(&h, "mainnet", now), Err(Refused::WrongMessage));
+        let code = sign_header("agent.near", &key(), &code_message(&"ab".repeat(32), now), [9; 32]);
+        assert_eq!(verify_connector_header(&code, "mainnet", now), Err(Refused::WrongMessage));
     }
 
     #[test]
