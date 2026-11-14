@@ -8,6 +8,8 @@
 //!   plain English, the terms, and once posted the job's progress on chain.
 //! - `POST /newcomer/{id}/edit` with `{"change": "..."}` redrafts once.
 //! - `POST /newcomer/{id}/reward` with `{"reward_near": "0.5"}` sets the reward.
+//! - `POST /newcomer/{id}/deadline` with `{"hours": 24}` sets how long the job
+//!   stays open (1 hour to 30 days).
 //! - `POST /newcomer/{id}/pay` with `{"account": "..."}` answers the
 //!   transactions the buyer's wallet signs: `post_job` with the reward, and
 //!   the drafting fee to the verifier.
@@ -134,6 +136,10 @@ pub struct Record {
     pub draft: Option<DraftView>,
     #[serde(default)]
     pub reward_near: String,
+    /// How long the job stays open once posted, if the buyer chose; else
+    /// the house's default.
+    #[serde(default)]
+    pub deadline_hours: Option<u32>,
     #[serde(default)]
     pub account: Option<String>,
     #[serde(default)]
@@ -386,6 +392,7 @@ impl<M: Model + Send + Sync + 'static> House<M> {
             error: None,
             draft: None,
             reward_near: self.terms.suggested_reward_near.clone(),
+            deadline_hours: None,
             account: None,
             spec_uri: None,
             job_id: None,
@@ -531,6 +538,28 @@ impl<M: Model + Send + Sync + 'static> House<M> {
         self.update(id, |r| reward_near.trim().clone_into(&mut r.reward_near)).ok_or_else(busy)
     }
 
+    /// Longest a job may stay open: the contract's own limit, 30 days.
+    pub const MAX_DEADLINE_HOURS: u32 = 30 * 24;
+
+    /// Sets how long the job stays open once posted.
+    ///
+    /// # Errors
+    /// Not a drafted request, or outside 1 hour to 30 days.
+    pub fn set_deadline(&self, id: &str, hours: u32) -> Result<Record, Refusal> {
+        let record = self.get(id)?;
+        if record.stage != Stage::Drafted {
+            return Err(wrong_stage("the deadline can be changed until you pay"));
+        }
+        if !(1..=Self::MAX_DEADLINE_HOURS).contains(&hours) {
+            return Err(bad("the job can stay open from 1 hour to 30 days"));
+        }
+        self.update(id, |r| r.deadline_hours = Some(hours)).ok_or_else(busy)
+    }
+
+    fn deadline_hours(&self, record: &Record) -> u32 {
+        record.deadline_hours.unwrap_or(self.terms.deadline_hours)
+    }
+
     fn near(amount: &str) -> Result<u128, Refusal> {
         sphinx_near::parse_near(amount).map_err(|e| bad(e.message().to_owned()))
     }
@@ -669,7 +698,7 @@ impl<M: Model + Send + Sync + 'static> House<M> {
             return Err(Refusal::new(
                 StatusCode::CONFLICT,
                 "not_agreed",
-                "separate solver runs did not agree with our answers on every test; change the request first",
+                "separate checking runs did not agree with the expected answers on every test; change the request first",
             ));
         }
         let account: AccountId = account.parse().map_err(|_| bad("not a NEAR account id"))?;
@@ -688,7 +717,7 @@ impl<M: Model + Send + Sync + 'static> House<M> {
         let job_deposit: u128 = config.job_storage_deposit.parse().unwrap_or(0);
         // Bonds times attempts may never exceed the reward.
         let max_total = u32::try_from((reward / bond.max(1)).min(12)).unwrap_or(12).max(1);
-        let deadline_ns = now_ns() + u64::from(self.terms.deadline_hours) * 3_600_000_000_000;
+        let deadline_ns = now_ns() + u64::from(self.deadline_hours(&record)) * 3_600_000_000_000;
         let title = sphinx_protocol::title::from_spec(&draft.spec)
             .unwrap_or_else(|| "A job drafted on Sphinx".to_owned());
         let post_args = json!({
@@ -1065,7 +1094,7 @@ impl<M: Model + Send + Sync + 'static> House<M> {
                 "drafting_fee_near": fee, "drafting_fee_usd": to_usd(fee),
                 "suggested_reward_near": self.terms.suggested_reward_near,
                 "fee_on_payout_percent": 5, "bond_near": self.terms.bond_near,
-                "deadline_hours": self.terms.deadline_hours,
+                "deadline_hours": self.deadline_hours(&record),
             },
             "house_wrote_the_tests": true,
             "tests_revealed": record.tests_revealed,
@@ -1222,12 +1251,12 @@ pub fn describe(p: &Progress) -> String {
 pub fn checks(tests: usize, agreed: usize, total: usize, differences: usize) -> Vec<String> {
     let mut out = vec![
         format!("We wrote {tests} hidden tests from your words, and agents only ever learn how many they pass"),
-        "Our own solution passes every test, and the enclave checks that again before the job opens".to_owned(),
+        "Sphinx's reference answer passes every test, which proves the job can be done, and the enclave checks that again before the job opens".to_owned(),
     ];
     out.push(if differences == 0 {
-        format!("A second solver read only the task text and matched our answers on all {total} tests, so the task says what the tests check")
+        format!("A separate checking run read only the task text and agreed with the expected answers on all {total} tests, so the task says what the tests check")
     } else {
-        format!("Independent solvers disagreed with our answers on {} of {total} tests, so honest agents could fail this draft. Say exactly what you want and we redraft it", total - agreed)
+        format!("Separate checking runs disagreed with the expected answers on {} of {total} tests, so honest agents could fail this draft. Say exactly what you want and we redraft it", total - agreed)
     });
     out.push("Your reward pays only for code that passes every test, and comes back to you if nobody does by the deadline".to_owned());
     out
@@ -1307,6 +1336,7 @@ pub fn router<M: Model + Send + Sync + 'static>(house: Arc<House<M>>) -> Router 
         .route("/newcomer/{id}", get(view::<M>))
         .route("/newcomer/{id}/edit", post(edit::<M>))
         .route("/newcomer/{id}/reward", post(reward::<M>))
+        .route("/newcomer/{id}/deadline", post(deadline::<M>))
         .route("/newcomer/{id}/pay", post(pay::<M>))
         .route("/newcomer/{id}/paid", post(paid::<M>))
         .route("/newcomer/{id}/stored", post(stored::<M>))
@@ -1359,6 +1389,21 @@ async fn reward<M: Model + Send + Sync + 'static>(
     check_id(&id)?;
     let record = house.set_reward(&id, &body.reward_near)?;
     Ok(Json(json!({ "reward_near": record.reward_near })))
+}
+
+#[derive(Deserialize)]
+struct DeadlineBody {
+    hours: u32,
+}
+
+async fn deadline<M: Model + Send + Sync + 'static>(
+    State(house): State<Arc<House<M>>>,
+    Path(id): Path<String>,
+    Json(body): Json<DeadlineBody>,
+) -> Result<Json<Value>, Refusal> {
+    check_id(&id)?;
+    let record = house.set_deadline(&id, body.hours)?;
+    Ok(Json(json!({ "deadline_hours": record.deadline_hours })))
 }
 
 async fn pay<M: Model + Send + Sync + 'static>(
