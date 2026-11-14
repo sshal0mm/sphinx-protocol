@@ -82,7 +82,16 @@ pub struct Intents {
     pub rpc_keys: Arc<sphinx_near::RpcKeys>,
     http: reqwest::Client,
     starts: Mutex<HashMap<String, (Instant, u32)>>,
+    /// Chain reads per visitor in the last ten minutes, and recent answers,
+    /// so the routes that read the chain cannot be used to burn RPC credit.
+    reads: Mutex<HashMap<String, (Instant, u32)>>,
+    answers: Mutex<HashMap<String, (Instant, Value)>>,
 }
+
+/// Chain reads one visitor may cause in ten minutes.
+const READS_PER_TEN_MINUTES: u32 = 60;
+/// How long a balance or stored-tests answer is reused.
+const ANSWER_FOR: Duration = Duration::from_secs(20);
 
 impl Intents {
     pub fn new(
@@ -103,6 +112,8 @@ impl Intents {
             rpc_keys,
             http: reqwest::Client::new(),
             starts: Mutex::new(HashMap::new()),
+            reads: Mutex::new(HashMap::new()),
+            answers: Mutex::new(HashMap::new()),
         }
     }
 
@@ -115,6 +126,32 @@ impl Intents {
                 "mainnet_only",
                 "NEAR Intents runs on mainnet only, switch the site to mainnet to pay or withdraw across chains",
             ))
+        }
+    }
+
+    /// A recent answer for `key`, if any.
+    fn recent(&self, key: &str) -> Option<Value> {
+        let answers = self.answers.lock().ok()?;
+        answers.get(key).filter(|(at, _)| at.elapsed() < ANSWER_FOR).map(|(_, v)| v.clone())
+    }
+
+    fn remember(&self, key: String, value: &Value) {
+        if let Ok(mut answers) = self.answers.lock() {
+            answers.retain(|_, (at, _)| at.elapsed() < ANSWER_FOR);
+            answers.insert(key, (Instant::now(), value.clone()));
+        }
+    }
+
+    /// Counts a chain read for `client`; refused past the limit.
+    fn admit_read(&self, client: &str) -> Result<(), Refusal> {
+        let Ok(mut reads) = self.reads.lock() else { return Err(too_many()) };
+        reads.retain(|_, (at, _)| at.elapsed() < Duration::from_mins(10));
+        let entry = reads.entry(client.to_owned()).or_insert((Instant::now(), 0));
+        entry.1 += 1;
+        if entry.1 <= READS_PER_TEN_MINUTES {
+            Ok(())
+        } else {
+            Err(too_many())
         }
     }
 
@@ -312,11 +349,16 @@ impl Intents {
     ///
     /// # Errors
     /// Not a mainnet account, or the RPC could not say.
-    pub async fn balance(&self, account: &str) -> Result<Value, Refusal> {
+    pub async fn balance(&self, who: &str, account: &str) -> Result<Value, Refusal> {
         self.mainnet_only()?;
         if !mainnet_account(account) {
             return Err(bad("not a NEAR mainnet account"));
         }
+        let key = format!("balance:{account}");
+        if let Some(v) = self.recent(&key) {
+            return Ok(v);
+        }
+        self.admit_read(who)?;
         let spendable = self.spendable(account).await?;
         let args = base64::Engine::encode(
             &base64::engine::general_purpose::STANDARD,
@@ -334,11 +376,13 @@ impl Intents {
             .ok_or_else(|| upstream("NEAR RPC could not read the wNEAR balance"))?;
         let yocto: String = serde_json::from_slice(&bytes).unwrap_or_else(|_| "0".to_owned());
         let n: u128 = yocto.parse().unwrap_or(0);
-        Ok(json!({
+        let out = json!({
             "account": account,
             "wnear_yocto": n.to_string(), "wnear": format_near(n),
             "spendable_yocto": spendable.to_string(), "spendable": format_near(spendable),
-        }))
+        });
+        self.remember(key, &out);
+        Ok(out)
     }
 
     /// Whether OutLayer's keystore holds job `job_id`'s hidden tests for
@@ -346,10 +390,20 @@ impl Intents {
     ///
     /// # Errors
     /// Not an account id, or the RPC could not say.
-    pub async fn tests_stored(&self, account: &str, job_id: u64) -> Result<Value, Refusal> {
+    pub async fn tests_stored(
+        &self,
+        who: &str,
+        account: &str,
+        job_id: u64,
+    ) -> Result<Value, Refusal> {
         if account.parse::<sphinx_near::near_api::types::AccountId>().is_err() {
             return Err(bad("not a NEAR account id"));
         }
+        let key = format!("stored:{account}:{job_id}");
+        if let Some(v) = self.recent(&key) {
+            return Ok(v);
+        }
+        self.admit_read(who)?;
         let keystore = if self.mainnet { "outlayer.near" } else { "outlayer.testnet" };
         let args = base64::Engine::encode(
             &base64::engine::general_purpose::STANDARD,
@@ -372,11 +426,13 @@ impl Intents {
             .and_then(|e| e["storage_deposit"].as_str())
             .and_then(|d| d.parse().ok())
             .unwrap_or(0);
-        Ok(json!({
+        let out = json!({
             "stored": found.is_some(),
             "deposit_yocto": deposit.to_string(),
             "deposit": format_near(deposit),
-        }))
+        });
+        self.remember(key, &out);
+        Ok(out)
     }
 
     /// Tells 1Click a deposit was sent.
@@ -475,16 +531,18 @@ async fn status(
 
 async fn balance(
     State(i): State<Arc<Intents>>,
+    headers: HeaderMap,
     Path(account): Path<String>,
 ) -> Result<Json<Value>, Refusal> {
-    i.balance(&account).await.map(Json)
+    i.balance(&client(&headers), &account).await.map(Json)
 }
 
 async fn tests_stored(
     State(i): State<Arc<Intents>>,
+    headers: HeaderMap,
     Path((account, job_id)): Path<(String, u64)>,
 ) -> Result<Json<Value>, Refusal> {
-    i.tests_stored(&account, job_id).await.map(Json)
+    i.tests_stored(&client(&headers), &account, job_id).await.map(Json)
 }
 
 async fn submit(

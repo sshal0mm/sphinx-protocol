@@ -15,7 +15,7 @@ export function useNetwork() {
   const cookie = useCookie<string | null>(NETWORK_COOKIE, { sameSite: 'lax', maxAge: 60 * 60 * 24 * 365 })
   const fallback: Network = ready(defaultNetwork) ? defaultNetwork : (choices[0] ?? 'testnet')
   const network: Network = cookie.value && ready(cookie.value) ? cookie.value : fallback
-  const { contract, explorer } = networks[network]
+  const { contract, explorer, verifier } = networks[network] as { contract: string, explorer: string, verifier: string }
 
   function switchTo(next: Network) {
     if (next === network || !ready(next)) return
@@ -23,5 +23,5 @@ export function useNetwork() {
     if (import.meta.client) window.location.reload()
   }
 
-  return { network, contract, explorer, choices, switchTo }
+  return { network, contract, explorer, verifier, choices, switchTo }
 }

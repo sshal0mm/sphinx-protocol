@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checkPayment, checkStore, checkWithdrawal, connectorKeyOk, toYocto, CONNECTOR_ALLOWANCE, type WalletTx } from './checks'
+import { checkFundRecord, checkPayment, checkStore, checkWithdrawRecord, checkWithdrawal, connectorKeyOk, toYocto, CONNECTOR_ALLOWANCE, type WalletTx } from './checks'
 
 const N = 10n ** 24n
 const call = (methodName: string, args: Record<string, unknown>, deposit: string) =>
@@ -23,6 +23,12 @@ describe('checkPayment', () => {
   ]
   it('accepts exactly the payment shown', () => {
     expect(() => checkPayment(good(), want)).not.toThrow()
+  })
+  it('refuses a storage deposit or drafting fee above their caps', () => {
+    const big = { ...want, fee: N }
+    const txs = good()
+    ;(txs[1]!.actions[0] as { params: { deposit: string } }).params.deposit = N.toString()
+    expect(() => checkPayment(txs, big)).toThrow()
   })
   it('refuses a bigger deposit, another receiver, an extra transaction or an extra action', () => {
     const more = good()
@@ -86,5 +92,34 @@ describe('connectorKeyOk', () => {
     expect(connectorKeyOk({ ...s, method_names: [] }, 'escrow.near')).toBe(false)
     expect(connectorKeyOk({ ...s, allowance_yocto: '1' + CONNECTOR_ALLOWANCE }, 'escrow.near')).toBe(false)
     expect(connectorKeyOk(s, 'other.near')).toBe(false)
+  })
+})
+
+describe('1Click records', () => {
+  const fund = {
+    quoteResponse: {
+      quoteRequest: { recipient: 'alice.near', refundTo: 'alice.near', amount: (N / 2n).toString(), swapType: 'EXACT_OUTPUT', destinationAsset: 'nep141:wrap.near' },
+      quote: { depositAddress: '0xAbC', amountIn: '2091000' }
+    }
+  }
+  const want = { account: 'alice.near', near: N / 2n, depositAddress: '0xabc', amountIn: '2091000' }
+  it('confirms a pay-in address only when it pays the buyer exactly', () => {
+    expect(() => checkFundRecord(fund, want)).not.toThrow()
+    expect(() => checkFundRecord(fund, { ...want, account: 'bob.near' })).toThrow()
+    expect(() => checkFundRecord(fund, { ...want, depositAddress: '0xdef' })).toThrow()
+    expect(() => checkFundRecord(fund, { ...want, amountIn: '3000000' })).toThrow()
+    expect(() => checkFundRecord({}, want)).toThrow()
+  })
+  const out = {
+    quoteResponse: {
+      quoteRequest: { recipient: '0xMine', refundTo: 'alice.near', amount: N.toString(), swapType: 'EXACT_INPUT', originAsset: 'nep141:wrap.near' },
+      quote: { depositAddress: 'd6'.repeat(32) }
+    }
+  }
+  const wantOut = { account: 'alice.near', near: N, recipient: '0xMine', depositAddress: 'd6'.repeat(32) }
+  it('confirms a withdrawal address only when it pays the typed recipient', () => {
+    expect(() => checkWithdrawRecord(out, wantOut)).not.toThrow()
+    expect(() => checkWithdrawRecord(out, { ...wantOut, recipient: '0xThief' })).toThrow()
+    expect(() => checkWithdrawRecord(out, { ...wantOut, near: 2n * N })).toThrow()
   })
 })

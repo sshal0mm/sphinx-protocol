@@ -87,6 +87,13 @@ export function useIntents() {
     status: (deposit: string) => $fetch<SwapStatus>(`${base}/status/${encodeURIComponent(deposit)}`),
     submit: (body: { deposit_address: string, tx_hash: string, near_sender?: string }) =>
       $fetch(`${base}/submit`, { method: 'POST', body }),
+    /**
+     * What 1Click itself says about a deposit address, read from 1Click
+     * directly (not through Sphinx), so the page can confirm an address
+     * before anyone sends to it.
+     */
+    oneClickRecord: (deposit: string) =>
+      $fetch<OneClickRecord>('https://1click.chaindefuser.com/v0/status', { query: { depositAddress: deposit }, timeout: 10_000 }),
     /** wNEAR held, and NEAR the account can withdraw, in yoctoNEAR. */
     balance: async (account: string) => {
       const b = await $fetch<{ wnear_yocto: string, spendable_yocto: string }>(`${base}/balance/${encodeURIComponent(account)}`)

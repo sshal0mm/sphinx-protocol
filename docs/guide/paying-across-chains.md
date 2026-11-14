@@ -8,6 +8,8 @@ The escrow holds and pays NEAR, and its mainnet code can never change. NEAR Inte
 
 Sphinx never holds the money. Every deposit address is 1Click's, the NEAR always lands in the buyer's own account, and a failed swap is refunded to the user, never to Sphinx.
 
+You do not have to take Sphinx's word for an address. Before showing a deposit address or asking your wallet to sign, the page asks 1Click itself, directly from your browser, what that address was made for, and refuses unless it pays exactly the amount the page asked for to your own account (or, for a withdrawal, to the address you typed) and refunds to you. The amounts, accounts and recipients it checks come from the page and from what you typed, never from Sphinx's server, so a server that went wrong or was spoofed cannot redirect the money. The checks are in `web/app/utils/checks.ts`.
+
 ## paying for a job from another chain
 
 On a drafted job's page, below the reward, choose a chain and a token:

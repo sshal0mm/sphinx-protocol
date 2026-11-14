@@ -42,6 +42,12 @@ const amount = (v: unknown) => {
   }
 }
 
+/** Caps on what a payment may add beyond the reward the buyer typed: the
+ * escrow's job storage deposit (0.025 NEAR today) and the drafting fee
+ * (0.05 NEAR today), with headroom, so a server reporting more is refused. */
+export const MAX_JOB_STORAGE = 50_000_000_000_000_000_000_000n
+export const MAX_DRAFTING_FEE = 100_000_000_000_000_000_000_000n
+
 /**
  * Posting a drafted job: exactly two transactions, `post_job` to the escrow
  * with the reward shown and a deposit of that reward plus the escrow's
@@ -51,6 +57,7 @@ const amount = (v: unknown) => {
 export function checkPayment(txs: WalletTx[], want: { contract: string, verifier: string, reward: bigint, storage: bigint, fee: bigint }) {
   const [post, fee] = txs
   if (txs.length !== 2 || !post || !fee) throw refused('a payment')
+  if (want.storage < 0n || want.storage > MAX_JOB_STORAGE || want.fee < 0n || want.fee > MAX_DRAFTING_FEE) throw refused('a payment')
   const p = only(post)
   const f = only(fee)
   if (post.receiverId !== want.contract || p.type !== 'FunctionCall' || p.params.methodName !== 'post_job'
@@ -107,4 +114,55 @@ export function connectorKeyOk(s: { contract?: unknown, allowance_yocto?: unknow
   const methods = s.method_names
   return s.contract === contract && s.allowance_yocto === CONNECTOR_ALLOWANCE && typeof s.claim === 'string'
     && Array.isArray(methods) && methods.length > 0 && methods.every(m => CONNECTOR_METHODS.includes(m))
+}
+
+/**
+ * What 1Click itself says about a deposit address (GET /v0/status from
+ * 1click.chaindefuser.com, read by the browser, not through Sphinx): the
+ * request the quote was made for.
+ */
+export interface OneClickRecord {
+  quoteResponse?: {
+    quoteRequest?: {
+      recipient?: string
+      refundTo?: string
+      amount?: string
+      swapType?: string
+      originAsset?: string
+      destinationAsset?: string
+    }
+    quote?: { depositAddress?: string, amountIn?: string }
+  }
+}
+
+const refusedAddress = () =>
+  new Error('NEAR Intents does not confirm this deposit address for your request, nothing was sent')
+
+/**
+ * Paying from another chain: 1Click's own record of the deposit address
+ * delivers exactly `near` to the buyer's account and refunds to it, so a
+ * server that went wrong cannot show an address that pays anyone else.
+ */
+export function checkFundRecord(record: OneClickRecord, want: { account: string, near: bigint, depositAddress: string, amountIn: string }) {
+  const r = record.quoteResponse?.quoteRequest
+  const q = record.quoteResponse?.quote
+  const ok = r && q && q.depositAddress?.toLowerCase() === want.depositAddress.toLowerCase()
+    && r.swapType === 'EXACT_OUTPUT' && r.destinationAsset === 'nep141:wrap.near'
+    && r.recipient === want.account && r.refundTo === want.account
+    && amount(r.amount) === want.near && q.amountIn === want.amountIn
+  if (!ok) throw refusedAddress()
+}
+
+/**
+ * Withdrawing to another chain: 1Click's own record sends exactly `near`
+ * of wNEAR to the recipient the user typed, and refunds to their account.
+ */
+export function checkWithdrawRecord(record: OneClickRecord, want: { account: string, near: bigint, recipient: string, depositAddress: string }) {
+  const r = record.quoteResponse?.quoteRequest
+  const q = record.quoteResponse?.quote
+  const ok = r && q && q.depositAddress === want.depositAddress
+    && r.swapType === 'EXACT_INPUT' && r.originAsset === 'nep141:wrap.near'
+    && r.recipient?.toLowerCase() === want.recipient.toLowerCase() && r.refundTo === want.account
+    && amount(r.amount) === want.near
+  if (!ok) throw refusedAddress()
 }

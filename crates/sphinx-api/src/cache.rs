@@ -37,6 +37,8 @@ struct Store {
     entries: HashMap<String, Entry>,
     /// Keys a background read is refreshing now.
     refreshing: HashSet<String>,
+    /// When answers were last marked stale.
+    expired: Option<Instant>,
 }
 
 /// A [`Chain`] whose reads are reused (see the module docs).
@@ -77,6 +79,12 @@ impl<C: Chain> Cached<C> {
     pub fn expire_all(&self) {
         let back = self.fresh + Duration::from_millis(1);
         let mut s = self.store.lock().unwrap_or_else(PoisonError::into_inner);
+        // At most once every five seconds, so requests anyone can send
+        // (storing code) cannot keep every answer cold.
+        if s.expired.is_some_and(|at| at.elapsed() < Duration::from_secs(5)) {
+            return;
+        }
+        s.expired = Some(Instant::now());
         for (key, (at, _)) in &mut s.entries {
             if !key.starts_with(SETTLED) {
                 if let Some(earlier) = Instant::now().checked_sub(back) {

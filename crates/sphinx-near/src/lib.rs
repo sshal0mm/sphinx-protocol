@@ -61,9 +61,29 @@ pub fn rpc_keys_from_env() -> Vec<String> {
 /// does not answer within two seconds is skipped; it still looks on its own,
 /// only later. Needs a running Tokio runtime.
 pub fn nudge_relayer() {
+    static LAST: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let Some(url) = std::env::var("SPHINX_RELAYER_NUDGE").ok().filter(|u| !u.is_empty()) else {
         return;
     };
+    // At most one nudge every five seconds from this process, so requests
+    // anyone can send (such as storing code) cannot keep the relayer
+    // reading the chain flat out.
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let last = LAST.load(std::sync::atomic::Ordering::Relaxed);
+    if now < last.saturating_add(5)
+        || LAST
+            .compare_exchange(
+                last,
+                now,
+                std::sync::atomic::Ordering::Relaxed,
+                std::sync::atomic::Ordering::Relaxed,
+            )
+            .is_err()
+    {
+        return;
+    }
     if tokio::runtime::Handle::try_current().is_err() {
         return;
     }
