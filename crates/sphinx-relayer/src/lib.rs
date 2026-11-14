@@ -394,9 +394,8 @@ impl Relayer {
             self.account.as_str(),
         )
         .await?;
-        let o = self
-            .escrow
-            .call(
+        let prove = || {
+            self.escrow.call(
                 self.account.clone(),
                 self.signer.clone(),
                 "confirm_run",
@@ -404,7 +403,32 @@ impl Relayer {
                 NearToken::from_yoctonear(0),
                 sphinx_near::call_gas("confirm_run"),
             )
-            .await?;
+        };
+        let mut o = prove().await?;
+        if o.value != Some(Value::Bool(true)) {
+            // The escrow keeps its own copy of OutLayer's approved worker
+            // images, so a run on an image OutLayer approved since is
+            // refused until the copy is refreshed. Refresh it (anyone may)
+            // and prove the same run again; no second enclave run.
+            #[allow(clippy::print_stderr, reason = "the relayer's log is its standard error")]
+            if let Err(e) = self
+                .escrow
+                .call(
+                    self.account.clone(),
+                    self.signer.clone(),
+                    "sync_measurements",
+                    json!({}),
+                    NearToken::from_yoctonear(0),
+                    sphinx_near::call_gas("sync_measurements"),
+                )
+                .await
+            {
+                eprintln!("could not refresh the approved worker images: {}", e.render_panic());
+            } else {
+                eprintln!("refreshed the approved worker images; proving job {} again", job.id);
+                o = prove().await?;
+            }
+        }
         if o.value == Some(Value::Bool(true)) {
             #[allow(clippy::print_stderr, reason = "the relayer's log is its standard error")]
             {
