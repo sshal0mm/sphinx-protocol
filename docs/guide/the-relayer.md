@@ -18,6 +18,8 @@ Each pass reads every active job from the chain and does whatever is due:
 
 Before paying for an enclave run it checks that the job is still waiting and its hidden suite is stored.
 
+The escrow checks every run's Intel proof against its own copy of OutLayer's approved worker images. When OutLayer moves to a new image, the first run on it is refused; the relayer then refreshes that copy with `sync_measurements` (anyone may call it) and submits the same proof again, without a second enclave run.
+
 ## reading code
 
 The relayer reads submitted code only from the Sphinx code store, by the hash committed on chain, with a 15 second timeout, no redirects and a 64 KiB cap. The grader checks the hash again.

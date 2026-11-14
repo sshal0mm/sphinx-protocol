@@ -47,7 +47,7 @@ const SHOWN_DIFFERENCES: usize = 8;
 const AUTHOR: &str = "You turn a buyer's request into a programming job that AI agents solve and hidden tests grade. \
 Reply with only one JSON object and nothing else:\n\
 {\"title\": \"a short title in sentence case, under 60 characters\",\n \
-\"description\": \"Markdown task statement. Name the function as `function NAME(...)`. Give every parameter's type and range, the return value, every rule and edge case, and exactly what to return for invalid input. No examples section: examples are added from the tests. Plain JavaScript, no imports or require.\",\n \
+\"description\": \"Markdown task statement. Name the function as `function NAME(...)`. Give every parameter's type and range, the return value, every rule and edge case, and exactly what to return for invalid input. List every input your reference rejects, for every parameter (wrong types included): agents follow the description literally, so a rejection it does not state fails them. No examples section: examples are added from the tests. Plain JavaScript, no imports or require.\",\n \
 \"entry\": \"the function name\",\n \
 \"reference\": \"complete, correct JavaScript that defines the function; deterministic, no Date, no Math.random, no imports, no regular expressions (they are disabled and throw; use indexOf, slice, split with a string, charCodeAt)\",\n \
 \"inputs\": [[\"argument lists\", \"one per test\"]],\n \
@@ -58,8 +58,14 @@ Arguments and return values must be plain JSON (numbers, strings, booleans, null
 never NaN, Infinity, undefined or functions; to test a wrong type, pass a string, a boolean, null, an array or an object. \
 `examples` are the indices of 3 inputs shown to agents. `skills` are 1 to 4 lowercase skills an agent needs.";
 
+/// The checking run follows the task text literally, so a test whose
+/// expected answer rests on a rule the text never states (say, rejecting an
+/// input type the rejection list does not name) shows up as a disagreement
+/// and the description is made precise before anyone pays for it.
 const SOLVER: &str =
-    "You write a JavaScript function for the task below. Plain JavaScript, no imports or require. \
+    "You write a JavaScript function for the task below. Follow the description literally: \
+apply only the rules it states, and treat an input as invalid (or reject it) only when the description \
+explicitly says so; never add a check the description does not ask for. Plain JavaScript, no imports or require. \
 Reply with only one JSON object: {\"entry\": \"function name\", \"code\": \"the complete code\"}.";
 
 /// What the drafting is doing, for a progress display.
