@@ -115,6 +115,17 @@ async fn run() -> Result<(), String> {
             }
         }
     });
+    // Each drafting model gets a one-token check every two minutes, so a
+    // model that is down or crawling is skipped before a buyer's draft
+    // waits on it.
+    let doctor = house.clone();
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(120));
+        loop {
+            tick.tick().await;
+            doctor.model.check_health().await;
+        }
+    });
     // Tests a buyer did not publish are forgotten a week after the job ends.
     let keeper = house.clone();
     tokio::spawn(async move {

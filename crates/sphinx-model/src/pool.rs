@@ -1,16 +1,36 @@
 //! Several NEAR AI Cloud models in order of preference. When the one in use
-//! is down (the gateway answers a server error or the connection fails after
-//! its retries), the next model that was confirmed private takes over, and
-//! stays in use until it fails in turn.
+//! is down (the gateway answers a server error, the connection fails after
+//! its retries, or a reply takes longer than [`NearAiCloud::TIMEOUT`]), the
+//! next model that was confirmed private takes over, and stays in use until
+//! it fails in turn.
+//!
+//! A model that fails is benched for a while, so the next request skips it
+//! at once. [`Pool::check_health`], run every couple of minutes, sends each
+//! model a one-token request: one that errors or answers slowly is benched
+//! before a buyer's draft ever waits on it, and one that answers well is
+//! back in play.
 
 use crate::{Message, Model, NearAiCloud};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
+/// How long a model that failed a real request is skipped.
+pub const BENCH_AFTER_FAILURE: Duration = Duration::from_mins(10);
+/// How long a model that failed a health check is skipped (until the next
+/// checks see it again).
+pub const BENCH_AFTER_CHECK: Duration = Duration::from_mins(3);
+/// A health check slower than this means the model is struggling; a healthy
+/// one answers in about a second.
+pub const SLOW: Duration = Duration::from_secs(15);
 
 /// Models in order of preference, each checked on its own.
 #[derive(Debug)]
 pub struct Pool {
     models: Vec<NearAiCloud>,
     active: AtomicUsize,
+    /// Per model: skipped until this time, if benched.
+    benched: Mutex<Vec<Option<Instant>>>,
 }
 
 /// NEAR AI's own TEE models tried when the configured one is down, unless
@@ -24,7 +44,8 @@ impl Pool {
     /// With no models.
     pub fn new(models: Vec<NearAiCloud>) -> Self {
         assert!(!models.is_empty(), "a pool needs at least one model");
-        Self { models, active: AtomicUsize::new(0) }
+        let n = models.len();
+        Self { models, active: AtomicUsize::new(0), benched: Mutex::new(vec![None; n]) }
     }
 
     /// The model from the environment (see [`NearAiCloud::from_env`]), then
@@ -105,6 +126,72 @@ impl Pool {
             .map(|i| (i, &self.models[i]))
             .filter(|(_, m)| m.ready())
     }
+
+    fn bench(&self, i: usize, for_: Duration) {
+        if let Ok(mut b) = self.benched.lock() {
+            if let Some(slot) = b.get_mut(i) {
+                *slot = Some(Instant::now() + for_);
+            }
+        }
+    }
+
+    fn unbench(&self, i: usize) {
+        if let Ok(mut b) = self.benched.lock() {
+            if let Some(slot) = b.get_mut(i) {
+                *slot = None;
+            }
+        }
+    }
+
+    fn is_benched(&self, i: usize) -> bool {
+        self.benched
+            .lock()
+            .ok()
+            .and_then(|b| b.get(i).copied().flatten())
+            .is_some_and(|until| Instant::now() < until)
+    }
+
+    /// The order to try models in: usable ones that are not benched first,
+    /// then benched ones, so a request still goes through when every model
+    /// had a bad moment.
+    fn order(&self) -> Vec<usize> {
+        let (fresh, benched): (Vec<usize>, Vec<usize>) =
+            self.usable().map(|(i, _)| i).partition(|&i| !self.is_benched(i));
+        fresh.into_iter().chain(benched).collect()
+    }
+
+    /// Each model's name and whether it is benched now, for the log and tests.
+    pub fn health(&self) -> Vec<(String, bool)> {
+        (0..self.models.len()).map(|i| (self.models[i].model.clone(), self.is_benched(i))).collect()
+    }
+
+    /// Sends every usable model a one-token request: one that errors or takes
+    /// longer than [`SLOW`] is benched, one that answers well is cleared.
+    pub async fn check_health(&self) {
+        let usable: Vec<usize> = self.usable().map(|(i, _)| i).collect();
+        for i in usable {
+            let m = &self.models[i];
+            match m.ping().await {
+                Ok(took) if took <= SLOW => self.unbench(i),
+                Ok(took) => {
+                    eprintln!(
+                        "model: {} (key {}) is slow ({took:?}), skipping it for now",
+                        m.model,
+                        m.key_hint()
+                    );
+                    self.bench(i, BENCH_AFTER_CHECK);
+                }
+                Err(e) => {
+                    eprintln!(
+                        "model: {} (key {}) failed a health check ({e}), skipping it for now",
+                        m.model,
+                        m.key_hint()
+                    );
+                    self.bench(i, BENCH_AFTER_CHECK);
+                }
+            }
+        }
+    }
 }
 
 /// An error that says the model (or this key) cannot answer now, not that
@@ -133,7 +220,7 @@ impl Model for Pool {
     }
 
     async fn complete(&self, messages: &[Message]) -> Result<String, String> {
-        let order: Vec<usize> = self.usable().map(|(i, _)| i).collect();
+        let order = self.order();
         let mut last = "no drafting model is confirmed private right now".to_owned();
         for i in order {
             let m = &self.models[i];
@@ -145,6 +232,7 @@ impl Model for Pool {
                     return Ok(reply);
                 }
                 Err(e) if is_outage(&e) => {
+                    self.bench(i, BENCH_AFTER_FAILURE);
                     eprintln!(
                         "model: {} (key {}) cannot answer ({e}), trying the next one",
                         m.model,
@@ -162,6 +250,21 @@ impl Model for Pool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn benched_models_go_last_and_come_back() {
+        let first = NearAiCloud::new(NearAiCloud::GATEWAY, "k", "a");
+        let pool =
+            Pool::new(vec![first.clone(), first.sibling("b".into()), first.sibling("c".into())]);
+        // Unconfirmed models are not usable at all; order only ranks usable ones.
+        assert_eq!(pool.order(), Vec::<usize>::new());
+        pool.bench(0, Duration::from_mins(1));
+        assert!(pool.is_benched(0) && !pool.is_benched(1));
+        pool.unbench(0);
+        assert!(!pool.is_benched(0));
+        pool.bench(2, Duration::ZERO);
+        assert!(!pool.is_benched(2), "a bench that has run out no longer counts");
+    }
 
     #[test]
     fn outages_are_told_apart_from_bad_requests() {

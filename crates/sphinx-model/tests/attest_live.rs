@@ -36,3 +36,26 @@ async fn every_model_in_the_pool_attests_and_signs_its_replies() {
         assert!(reply.to_lowercase().contains("ok"), "{name}: {reply}");
     }
 }
+
+/// The pool's health check reaches every model and benches none of them
+/// while NEAR AI Cloud is healthy.
+#[tokio::test]
+#[ignore = "network and a NEAR AI key"]
+async fn a_healthy_pool_benches_nothing() {
+    use sphinx_model::{NearAiCloud, Pool};
+    let key = std::env::var("SPHINX_MODEL_KEY").unwrap();
+    let first = NearAiCloud::new(NearAiCloud::GATEWAY, key, NearAiCloud::DEFAULT_MODEL);
+    let mut models = vec![first.clone()];
+    for name in sphinx_model::pool::DEFAULT_FALLBACKS {
+        models.push(first.sibling((*name).to_owned()));
+    }
+    let pool = Pool::new(models);
+    assert!(pool.confirm_privacy().await);
+    for m in [first.clone(), first.sibling("Qwen/Qwen3.8-27B".into())] {
+        let took = m.ping().await.unwrap();
+        println!("{} answered a ping in {took:?}", m.model);
+    }
+    pool.check_health().await;
+    println!("{:?}", pool.health());
+    assert!(pool.health().iter().all(|(_, benched)| !benched));
+}

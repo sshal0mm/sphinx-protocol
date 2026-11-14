@@ -105,10 +105,12 @@ impl NearAiCloud {
     /// The longest one completion may take before the attempt is abandoned.
     /// A draft (task text, a full hidden suite and a reference) is several
     /// thousand tokens in one reply; at 25 to 35 tokens a second, which NEAR
-    /// AI Cloud measured on 10 Nov 2026, that alone can pass three minutes.
-    /// A timed-out reply is not retried, since a retry would cost the same
-    /// wait again, so the limit leaves room for a slow but working gateway.
-    pub const TIMEOUT: Duration = Duration::from_mins(10);
+    /// AI Cloud measured on 10 Nov 2026, that is up to about four minutes.
+    /// A timed-out reply is not retried here; a [`Pool`] moves to its next
+    /// model instead.
+    pub const TIMEOUT: Duration = Duration::from_mins(6);
+    /// The longest a [`NearAiCloud::ping`] may take.
+    pub const PING_TIMEOUT: Duration = Duration::from_secs(20);
 
     pub fn new(
         base_url: impl Into<String>,
@@ -331,6 +333,33 @@ impl NearAiCloud {
                 self.model, self.base_url
             )
         }
+    }
+
+    /// A one-token completion, to see whether the model answers now and how
+    /// fast. No retries and no signature check: it only measures health, and
+    /// its reply is never used.
+    ///
+    /// # Errors
+    /// The model did not answer in time or answered with an error.
+    pub async fn ping(&self) -> Result<Duration, String> {
+        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
+        let mut body = self.body(&[Message::user("Reply with the single word ok.")]);
+        body["max_tokens"] = json!(1);
+        let started = std::time::Instant::now();
+        let resp = self
+            .http
+            .post(&url)
+            .bearer_auth(&self.api_key)
+            .json(&body)
+            .timeout(Self::PING_TIMEOUT)
+            .send()
+            .await
+            .map_err(|e| format!("NEAR AI Cloud request failed: {}", chain(&e)))?;
+        let status = resp.status();
+        if !status.is_success() {
+            return Err(format!("NEAR AI Cloud answered {status}"));
+        }
+        Ok(started.elapsed())
     }
 
     /// The request body for `messages`. `chat_template_kwargs` is NEAR AI's
