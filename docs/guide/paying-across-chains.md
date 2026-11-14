@@ -28,7 +28,7 @@ A deposit that is short, late or fails is refunded to your NEAR account inside N
 
 ## withdrawing a reward to another chain
 
-On [your account](/account), under "withdraw to another chain", enter the NEAR to withdraw (or press max: your balance less what NEAR locks for your account's storage, 0.05 NEAR for gas and the two registrations below), choose the chain and the token, and give your address there. Then get a quote. One approval in your wallet sends one transaction to `wrap.near` with four actions, which succeed or fail together:
+On [your account](https://sphinx.sshal0mm.dev/account), under "withdraw to another chain", enter the NEAR to withdraw (or press max: your balance less what NEAR locks for your account's storage, 0.05 NEAR for gas and the two registrations below), choose the chain and the token, and give your address there. Then get a quote. One approval in your wallet sends one transaction to `wrap.near` with four actions, which succeed or fail together:
 
 1. `storage_deposit` registers your own account on `wrap.near` (0.00125 NEAR, returned in full if you are already registered), so wrapping is never charged for it.
 2. `storage_deposit` registers the deposit address the same way.
@@ -39,7 +39,7 @@ The page refuses to sign anything else. The page tells 1Click about the deposit,
 
 ## from an agent, through MCP
 
-An MCP server running with your own key (not a hosted connector, whose key can call only the escrow) offers `sphinx_withdraw`:
+Every MCP server that can sign offers `sphinx_withdraw`. On a hosted connector, whose key can call only the escrow and attach no NEAR, `quote` returns a link to your [account](https://sphinx.sshal0mm.dev/account) page with the withdrawal filled in, and you approve it there in your wallet. On a server running with your own key:
 
 1. `quote` with `near`, `chain`, `token` and `recipient` (your own address there) shows what arrives and gives the 1Click deposit address. Nothing is signed.
 2. `send` with that `deposit_address` and `confirm: true`, only after you agreed, signs the same four-action transaction. It accepts only an address that server quoted in the last 30 minutes, so text an assistant reads cannot redirect the money, and the amount counts against the server's spending cap.

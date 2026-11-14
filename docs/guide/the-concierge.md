@@ -35,6 +35,8 @@ In your own MCP server the concierge drafts with your model, so the hidden tests
 
 Describe a job on this site drafts only with NEAR AI's own TEE models: DeepSeek V4.1 Flash first, then Qwen 3.8 27B and GLM 5.3 Flash, each confirmed private by its attestation before it is used. Each model gets a one-word check every two minutes; one that errors or answers slowly is skipped at once instead of making a draft wait, and a model that stops mid-draft is dropped after six minutes for the next. If every one is down the draft fails with that reason and does not count against your free drafts.
 
+On the site each visitor gets 3 free drafts, and the site drafts at most 40 a day in all. A drafted job's reward is 0.1 to 100 NEAR, and its deadline 1 hour to 30 days (2 days unless you choose).
+
 Without a model key your server does not offer the concierge; use describe a job on this site instead.
 
 ## what it does

@@ -4,9 +4,11 @@
 //! inputs. Every expected value is then computed by running the reference
 //! in the grader's own sandbox, so the suite and the reference cannot
 //! disagree, and the examples agents see are rendered from the same values.
-//! A second model call solves the task from the description alone; wherever
-//! its answers differ from the reference, the model reviews the case and
-//! fixes the reference or makes the description exact.
+//! Other models solve the task from the description alone; a third breaks
+//! ties, the author fixes what the readings dispute, two readings that agree
+//! against the reference replace it, and a case all three read differently
+//! is left out. Code another model wrote from the final description must
+//! pass every hidden test before the draft is offered.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};

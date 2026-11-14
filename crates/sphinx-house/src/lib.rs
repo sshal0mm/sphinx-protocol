@@ -972,7 +972,7 @@ impl<M: Model + Send + Sync + 'static> House<M> {
         let contract = self.at.escrow.contract_id().to_string();
         let plain =
             serde_json::to_vec(&secret_values(&contract, 999_999, suite, reference)).ok()?;
-        // Sealed-box encryption adds a few dozen bytes, base64 a third.
+        // The keystore's box encryption adds a few dozen bytes, base64 a third.
         let encrypted = "A".repeat((plain.len() + 96).div_ceil(3) * 4);
         let args = json!({
             "accessor": { "WasmHash": { "hash": "0".repeat(64) } },

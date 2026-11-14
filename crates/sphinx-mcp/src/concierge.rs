@@ -198,7 +198,7 @@ impl SphinxMcp {
             return Err(SphinxError::new(
                 Code::ConciergeUnsettled,
                 format!(
-                    "a second solver disagreed with the reference on {} of {} tests; nothing was posted",
+                    "in this draft, made before the current checks, a second solver disagreed with the reference on {} of {} tests; nothing was posted",
                     d.differences.len(),
                     d.tests
                 ),

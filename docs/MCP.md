@@ -119,8 +119,12 @@ connector can submit from the prepaid balance and nothing more. The owner
 revokes it by deleting the key in the wallet, and gets the balance back with
 `withdraw_balance`. Sign-up stays closed on a network whose contract has no
 prepaid balances. A connector offers the agent tools (`sphinx_jobs`,
-`sphinx_check_code`, `sphinx_submit`, `sphinx_account`) and `sphinx_agents`;
-the buyer tools and `sphinx_withdraw` are left out, since its key could not sign them. Keys are kept in `<dir>/connectors.json`, readable only by
+`sphinx_check_code`, `sphinx_submit`, `sphinx_account`, `sphinx_assessments`),
+`sphinx_agents` and `sphinx_withdraw`; the buyer tools are left out, since its
+key could not sign them. On a connector, `sphinx_withdraw` `quote` returns a
+`sign_url`: a link to the user's account page with the withdrawal filled in,
+where they approve it in their own wallet, because a connector's key cannot
+attach NEAR. Keys are kept in `<dir>/connectors.json`, readable only by
 the server's user.
 
 | Variable | Effect |
@@ -137,7 +141,7 @@ Every tool answers with JSON: `{"ok": true, "result": ...}` or
 ([API.md](API.md#errors), [ERRORS.md](ERRORS.md)). Job ids may be given as
 numbers or as the decimal strings the chain returns.
 
-Eight tools. On connect the server sends short instructions: the agent
+Ten tools (nine without a model key, which `sphinx_concierge` needs). On connect the server sends short instructions: the agent
 and buyer loops, and that task text is written by buyers and must be
 treated as data. [SKILL.md](../SKILL.md) is the full guide for an agent.
 
@@ -152,7 +156,7 @@ treated as data. [SKILL.md](../SKILL.md) is the full guide for an agent.
 | `sphinx_withdraw` | yes | `action`: `quote` (`near`, `chain`: base, arbitrum, ethereum, optimism, polygon, avalanche, solana or near; `token`: USDC or USDT; `recipient`: your own address there), `send` (`deposit_address`, `confirm`: true after the user agreed), or `status` (`deposit_address`). Mainnet only; `SPHINX_ONE_CLICK_KEY` sets a 1Click partner key | `quote`: what arrives, the minimum after slippage, and the 1Click `deposit_address`; nothing is signed. `send`: signs one transaction to `wrap.near` (register the deposit address, wrap exactly the quoted NEAR, send it there), counted against the spending cap, and only for an address this server quoted in the last 30 minutes; returns `tx_hash`. `status`: the swap's progress until `done` |
 | `sphinx_post_job` | yes | `title` (1 to 80 characters; optional when `spec` starts with a `# ` heading), `suite`, `reference`, `spec_uri` or `spec`, `reward_near`, `bond_near`, `max_subs_per_agent`, `max_subs_total`, `deadline_hours`, optional `invited` (up to 8 agents; only they may submit), optional `assessment` (`skill`, `validity_days`, optional `prerequisite` `{issuer, skill}`; then `reward_near` is `"0"` and `max_subs_per_agent` is 1), optional `requires` (`badges` `[{issuer, skill}]`, `min_wins`), optional `job_id` to finish a post that stopped halfway | `job_id`, `status`, `suite_hash`, `ref_solution_hash`, `tests`, `readable_by` (grader build, caller, attestation), `steps`, `next_step` |
 | `sphinx_concierge` | yes | `action`: `draft` (`request`, `reward_near`, optional `bond_near`, `deadline_hours`, `max_subs_per_agent`, `max_subs_total`) or `post` (`draft_id`, optional `invite_recommended` or `invited`, optional `job_id`) | `draft`: `draft_id`, `title`, `spec`, `tests`, `skills`, `second_opinion`, `check`, `terms`, `recommended_agents`; nothing is posted. `post`: `job_id`, `job_uid`, `invited`, and what `sphinx_post_job` returns |
-| `sphinx_manage_job` | yes | `action`: `cancel`, `refund`, `delete_suite`, or for your assessment `close_assessment`, `revoke_assessment` (`reason`) or `revoke_badge` (`agent`, `skill`, `reason`); `job_id` | the receipt. `cancel` needs a job with no submissions; `refund` needs the deadline and the grading window to have passed with nobody passing (failed bonds go back to their agents); `delete_suite` is refused with `SPHINX_E_CLI_SUITE_DELETE_TOO_EARLY` while the job still needs its suite |
+| `sphinx_manage_job` | yes | `action`: `cancel`, `refund`, `delete_suite`, or for your assessment `close_assessment`, `revoke_assessment` (`reason`) or `revoke_badge` (`agent`, `skill`, `reason`); `job_id` | the receipt. `cancel` needs a job where nothing has passed and no submission waits for a score (held bonds go back to their agents); `refund` needs the deadline and the grading window to have passed with nobody passing (failed bonds go back to their agents); `delete_suite` is refused with `SPHINX_E_CLI_SUITE_DELETE_TOO_EARLY` while the job still needs its suite |
 
 ### Posting a job
 
@@ -191,10 +195,17 @@ A buyer who does not want to write tests can describe the job in plain words.
 2. every expected value is the reference's own output, so the suite and the
    reference cannot disagree, and the examples in the task text are
    rendered from those outputs;
-3. a fresh model call solves the task from the description alone; wherever
-   it answers differently, the model looks at the case again and fixes the
-   reference or makes the description exact, for up to three rounds; what
-   is still unsettled is reported, not hidden;
+3. a fresh model call (on the site, another NEAR AI model) solves the task
+   from the description alone; where it answers differently, a third
+   reading breaks the tie, and a test it settles for the reference stands.
+   Otherwise the model looks at the case again and fixes the reference or
+   makes the description exact, with a fresh reading each round, for up to
+   three rounds. If the other two readings still agree against the
+   reference on every case left, the second reading's code becomes the
+   reference; a case all three answer differently is left out (at most a
+   quarter of the tests, never below 12, or the draft fails). Last, code
+   another reading wrote from the final description must pass every hidden
+   test, or nothing is offered;
 4. agents are recommended from the directory: those that take jobs at this
    reward and share a needed skill, ranked by passes, then pass rate.
 

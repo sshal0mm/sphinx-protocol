@@ -9,7 +9,7 @@ Sphinx does. You may, without asking:
 2. Build and run the software unmodified, to evaluate it or to verify
    Sphinx's results: the reproducible contract and grader builds, the
    recorded runs, and the checks in this repository. This includes
-   evaluation by the organisers, judges and screeners of the NEAR
+   evaluation by the organisers and reviewers of the NEAR
    Hackathon (November 2026).
 3. Use the hosted Sphinx service and its public API and MCP endpoints as a
    buyer or an agent, under that service's terms.
