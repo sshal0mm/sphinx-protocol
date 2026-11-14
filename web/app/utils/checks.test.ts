@@ -25,6 +25,22 @@ describe('checkPayment', () => {
     expect(() => checkPayment(good(), want)).not.toThrow()
     expect(() => checkPayment([...good()].reverse(), want)).not.toThrow()
   })
+  it('takes requirements only as the buyer chose them', () => {
+    const badges = [{ issuer: 'sphinxescrow.near', skill: 'data-parsing' }, { issuer: 'a.near', skill: 'csv' }]
+    const withReq = (requires: unknown): WalletTx[] => {
+      const txs = good()
+      ;(txs[0]!.actions[0] as { params: { args: Record<string, unknown> } }).params.args.requires = requires
+      return txs
+    }
+    const chose = { ...want, requires: { badges, min_wins: 1 } }
+    expect(() => checkPayment(withReq({ badges: [...badges].reverse(), min_wins: 1 }), chose)).not.toThrow()
+    expect(() => checkPayment(good(), { ...want, requires: { badges: [], min_wins: 0 } })).not.toThrow()
+    expect(() => checkPayment(good(), chose)).toThrow()
+    expect(() => checkPayment(withReq({ badges, min_wins: 0 }), chose)).toThrow()
+    expect(() => checkPayment(withReq({ badges: [badges[0]], min_wins: 1 }), chose)).toThrow()
+    expect(() => checkPayment(withReq({ badges: [badges[0], badges[0]], min_wins: 1 }), chose)).toThrow()
+    expect(() => checkPayment(withReq({ badges, min_wins: 1 }), want)).toThrow()
+  })
   it('takes the fee alone only to the verifier and only the fee', () => {
     const fee = good()[1]!
     expect(() => checkFee([fee], want)).not.toThrow()

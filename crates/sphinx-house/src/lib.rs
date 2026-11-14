@@ -47,7 +47,7 @@ use sphinx_concierge::{Concierge, Progress};
 use sphinx_model::Model;
 use sphinx_near::hidden_suite::{profile_for_job, secret_values, Keystore};
 use sphinx_near::near_api::types::AccountId;
-use sphinx_near::views::{Config, Job, JobStatus, Submission};
+use sphinx_near::views::{Config, Job, JobStatus, Requirements, Submission};
 use sphinx_near::Escrow;
 use sphinx_protocol::Hash32;
 
@@ -141,6 +141,11 @@ pub struct Record {
     /// the house's default.
     #[serde(default)]
     pub deadline_hours: Option<u32>,
+    /// Who may submit once the job is posted: current badges from skill
+    /// assessments and a number of paid wins, if the buyer chose; else any
+    /// agent.
+    #[serde(default)]
+    pub requires: Option<Requirements>,
     #[serde(default)]
     pub account: Option<String>,
     #[serde(default)]
@@ -427,6 +432,7 @@ impl<M: Model + Send + Sync + 'static> House<M> {
             draft: None,
             reward_near: self.terms.suggested_reward_near.clone(),
             deadline_hours: None,
+            requires: None,
             account: None,
             spec_uri: None,
             job_id: None,
@@ -596,6 +602,37 @@ impl<M: Model + Send + Sync + 'static> House<M> {
             return Err(bad("the job can stay open from 1 hour to 30 days"));
         }
         self.update(id, |r| r.deadline_hours = Some(hours)).ok_or_else(busy)
+    }
+
+    /// Sets who may submit once the job is posted. Every badge must name a
+    /// skill assessment that exists on chain, so agents can earn it; no
+    /// badges and no wins means any agent.
+    ///
+    /// # Errors
+    /// Not a drafted request, too many badges or wins, a badge twice, a badge
+    /// no assessment gives, or the chain could not be reached.
+    pub async fn set_requires(&self, id: &str, requires: Requirements) -> Result<Record, Refusal> {
+        let record = self.get(id)?;
+        if record.stage != Stage::Drafted && record.stage != Stage::Paying {
+            return Err(wrong_stage("who can take the job can be changed until you pay"));
+        }
+        check_requires(&requires)?;
+        for b in &requires.badges {
+            let latest: Option<String> = self
+                .at
+                .escrow
+                .view("latest_assessment", json!({ "issuer": b.issuer, "skill": b.skill }))
+                .await
+                .map_err(|e| upstream(e.message().to_owned()))?;
+            if latest.is_none() {
+                return Err(bad(format!(
+                    "no skill assessment gives the {} badge from {}, so no agent could take the job",
+                    b.skill, b.issuer
+                )));
+            }
+        }
+        let value = (!requires.badges.is_empty() || requires.min_wins > 0).then_some(requires);
+        self.update(id, |r| r.requires = value).ok_or_else(busy)
     }
 
     fn deadline_hours(&self, record: &Record) -> u32 {
@@ -775,13 +812,16 @@ impl<M: Model + Send + Sync + 'static> House<M> {
         let deadline_ns = now_ns() + u64::from(self.deadline_hours(&record)) * 3_600_000_000_000;
         let title = sphinx_protocol::title::from_spec(&draft.spec)
             .unwrap_or_else(|| "A job drafted on Sphinx".to_owned());
-        let post_args = json!({
+        let mut post_args = json!({
             "title": title,
             "spec_uri": spec_uri, "runtime": "js-boa/1",
             "reward": reward.to_string(), "bond": bond.to_string(),
             "max_subs_per_agent": self.terms.max_subs_per_agent.min(max_total),
             "max_subs_total": max_total, "deadline_ns": deadline_ns.to_string(),
         });
+        if let Some(requires) = &record.requires {
+            post_args["requires"] = json!(requires);
+        }
         let contract = self.at.escrow.contract_id().to_string();
         self.update(id, |r| {
             r.stage = Stage::Paying;
@@ -1225,6 +1265,7 @@ impl<M: Model + Send + Sync + 'static> House<M> {
                 "suggested_reward_near": self.terms.suggested_reward_near,
                 "fee_on_payout_percent": 5, "bond_near": self.terms.bond_near,
                 "deadline_hours": self.deadline_hours(&record),
+                "requires": record.requires,
                 "tests_deposit_near": tests_deposit.map(format_near),
                 "fund_near": fund.map(format_near),
             },
@@ -1405,7 +1446,8 @@ pub fn describe(p: &Progress) -> String {
             format!("Two other AI models agreed on {tests} answers the first draft got wrong, so their reading sets the expected answers")
         }
         Progress::FinalCheck => {
-            "Checking that another AI model, reading only the task text, passes every hidden test".to_owned()
+            "Checking that another AI model, reading only the task text, passes every hidden test"
+                .to_owned()
         }
     }
 }
@@ -1504,6 +1546,42 @@ struct StoredBody {
     store_tx: String,
 }
 
+/// Most badges a job may require, and most paid wins: the contract's limits.
+pub const MAX_REQUIRED_BADGES: usize = 4;
+pub const MAX_MIN_WINS: u32 = 10_000;
+
+/// The contract's own checks on a job's requirements, so a bad choice is
+/// refused here and not by the wallet transaction.
+fn check_requires(r: &Requirements) -> Result<(), Refusal> {
+    if r.badges.len() > MAX_REQUIRED_BADGES {
+        return Err(bad(format!("a job may require at most {MAX_REQUIRED_BADGES} badges")));
+    }
+    if r.min_wins > MAX_MIN_WINS {
+        return Err(bad(format!("ask for at most {MAX_MIN_WINS} paid wins")));
+    }
+    for (i, b) in r.badges.iter().enumerate() {
+        if b.issuer.parse::<AccountId>().is_err() {
+            return Err(bad(format!("{} is not a NEAR account id", b.issuer)));
+        }
+        if !valid_skill(&b.skill) {
+            return Err(bad(format!("{} is not a skill tag", b.skill)));
+        }
+        if r.badges[..i].contains(b) {
+            return Err(bad(format!("the {} badge from {} is listed twice", b.skill, b.issuer)));
+        }
+    }
+    Ok(())
+}
+
+/// A skill tag as the contract takes it: 1 to 32 of `a-z`, `0-9` and `-`,
+/// not starting or ending with `-`.
+fn valid_skill(s: &str) -> bool {
+    (1..=32).contains(&s.len())
+        && s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+        && !s.starts_with('-')
+        && !s.ends_with('-')
+}
+
 /// The HTTP routes.
 pub fn router<M: Model + Send + Sync + 'static>(house: Arc<House<M>>) -> Router {
     Router::new()
@@ -1512,6 +1590,7 @@ pub fn router<M: Model + Send + Sync + 'static>(house: Arc<House<M>>) -> Router 
         .route("/newcomer/{id}/edit", post(edit::<M>))
         .route("/newcomer/{id}/reward", post(reward::<M>))
         .route("/newcomer/{id}/deadline", post(deadline::<M>))
+        .route("/newcomer/{id}/requires", post(requires::<M>))
         .route("/newcomer/{id}/pay", post(pay::<M>))
         .route("/newcomer/{id}/paid", post(paid::<M>))
         .route("/newcomer/{id}/stored", post(stored::<M>))
@@ -1579,6 +1658,16 @@ async fn deadline<M: Model + Send + Sync + 'static>(
     check_id(&id)?;
     let record = house.set_deadline(&id, body.hours)?;
     Ok(Json(json!({ "deadline_hours": record.deadline_hours })))
+}
+
+async fn requires<M: Model + Send + Sync + 'static>(
+    State(house): State<Arc<House<M>>>,
+    Path(id): Path<String>,
+    Json(body): Json<Requirements>,
+) -> Result<Json<Value>, Refusal> {
+    check_id(&id)?;
+    let record = house.set_requires(&id, body).await?;
+    Ok(Json(json!({ "requires": record.requires })))
 }
 
 async fn pay<M: Model + Send + Sync + 'static>(
@@ -1662,6 +1751,41 @@ mod tests {
         assert_eq!(quote_account(&"ab".repeat(32)), "ab".repeat(32));
         assert_eq!(quote_account("buyer.sphinx999.testnet"), "intents.near");
         assert_ne!(quote_account("buyer.sphinx999.testnet"), "sphinx999.near");
+    }
+
+    fn badge(issuer: &str, skill: &str) -> sphinx_near::views::BadgeKey {
+        sphinx_near::views::BadgeKey { issuer: issuer.to_owned(), skill: skill.to_owned() }
+    }
+
+    #[test]
+    fn requirements_follow_the_contracts_limits() {
+        let ok =
+            Requirements { badges: vec![badge("sphinxescrow.near", "data-parsing")], min_wins: 1 };
+        assert!(check_requires(&ok).is_ok());
+        assert!(check_requires(&Requirements::default()).is_ok());
+        let five = Requirements {
+            badges: (0..5).map(|i| badge("sphinxescrow.near", &format!("skill-{i}"))).collect(),
+            min_wins: 0,
+        };
+        assert!(check_requires(&five).is_err());
+        let twice =
+            Requirements { badges: vec![badge("a.near", "x"), badge("a.near", "x")], min_wins: 0 };
+        assert!(check_requires(&twice).is_err());
+        for skill in ["", "Data", "-x", "x-", &"a".repeat(33)] {
+            assert!(
+                check_requires(&Requirements { badges: vec![badge("a.near", skill)], min_wins: 0 })
+                    .is_err(),
+                "{skill}"
+            );
+        }
+        assert!(check_requires(&Requirements {
+            badges: vec![badge("Not An Account", "x")],
+            min_wins: 0
+        })
+        .is_err());
+        assert!(
+            check_requires(&Requirements { badges: vec![], min_wins: MAX_MIN_WINS + 1 }).is_err()
+        );
     }
 
     #[test]

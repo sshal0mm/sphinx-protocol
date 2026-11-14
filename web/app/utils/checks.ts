@@ -4,6 +4,8 @@
 // throws, and nothing is signed, unless the transactions are exactly the
 // expected ones.
 
+import type { BadgeKey, Requirements } from './sphinx'
+
 /** A transaction as the wallet connector signs it. */
 export interface WalletTx {
   receiverId: string
@@ -54,7 +56,7 @@ export const MAX_DRAFTING_FEE = 100_000_000_000_000_000_000_000n
  * the reward shown and a deposit of that reward plus the escrow's storage
  * deposit. The page sends the fee first and posts only once it went through.
  */
-export function checkPayment(txs: WalletTx[], want: { contract: string, verifier: string, reward: bigint, storage: bigint, fee: bigint }) {
+export function checkPayment(txs: WalletTx[], want: { contract: string, verifier: string, reward: bigint, storage: bigint, fee: bigint, requires?: Requirements | null }) {
   if (want.storage < 0n || want.storage > MAX_JOB_STORAGE || want.fee < 0n || want.fee > MAX_DRAFTING_FEE) throw refused('a payment')
   const fee = txs.find(t => t.receiverId === want.verifier)
   const post = txs.find(t => t.receiverId === want.contract)
@@ -63,7 +65,21 @@ export function checkPayment(txs: WalletTx[], want: { contract: string, verifier
   const p = only(post)
   if (p.type !== 'FunctionCall' || p.params.methodName !== 'post_job'
     || amount(p.params.args?.reward) !== want.reward
-    || amount(p.params.deposit) !== want.reward + want.storage) throw refused('a payment')
+    || amount(p.params.deposit) !== want.reward + want.storage
+    || !sameRequirements(p.params.args?.requires, want.requires)) throw refused('a payment')
+}
+
+/** Who may submit, as the buyer chose it on the page: the same badges in any
+ * order and the same paid wins, or nothing at all for any agent. */
+function sameRequirements(got: unknown, want: Requirements | null | undefined): boolean {
+  const none = (r: Requirements | null | undefined) => !r || (r.badges.length === 0 && r.min_wins === 0)
+  if (got === undefined || got === null) return none(want)
+  if (none(want)) return false
+  const g = got as Requirements
+  if (!Array.isArray(g.badges) || g.min_wins !== want!.min_wins || g.badges.length !== want!.badges.length) return false
+  const key = (b: BadgeKey) => `${b.issuer}\u0000${b.skill}`
+  const have = new Set(g.badges.map(key))
+  return have.size === g.badges.length && want!.badges.every(b => have.has(key(b)))
 }
 
 /** The drafting fee alone: one plain transfer of exactly the fee to the verifier. */

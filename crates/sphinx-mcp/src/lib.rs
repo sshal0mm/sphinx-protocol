@@ -253,6 +253,10 @@ pub struct ConciergeAction {
     /// For post: invite exactly these agent accounts instead (at most 8).
     #[serde(default)]
     pub invited: Option<Vec<String>>,
+    /// For post: only agents holding these current skill badges (at most 4)
+    /// and this many paid wins may submit. Default: any agent.
+    #[serde(default)]
+    pub requires: Option<buyer::RequiresInput>,
     /// For post: finish a post that stopped halfway (the error's ctx.resume_with_job_id).
     #[serde(default, deserialize_with = "optional_job_id")]
     pub job_id: Option<u64>,
@@ -635,6 +639,7 @@ impl SphinxMcp {
                         draft_id,
                         invite_recommended: p.invite_recommended,
                         invited: p.invited,
+                        requires: p.requires,
                         job_id: p.job_id,
                         accept_differences: p.accept_differences,
                     })

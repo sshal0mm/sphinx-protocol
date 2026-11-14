@@ -61,6 +61,11 @@ pub struct ConciergePost {
     /// Invite exactly these agent accounts instead (at most 8).
     #[serde(default)]
     pub invited: Option<Vec<String>>,
+    /// Only agents holding these current skill badges (at most 4) and this
+    /// many paid wins may submit; the contract refuses the rest before any
+    /// bond moves. Default: any agent.
+    #[serde(default)]
+    pub requires: Option<crate::buyer::RequiresInput>,
     /// Finish a post of this draft that stopped halfway: the job id from the
     /// error's `ctx.resume_with_job_id`. Only the missing steps run.
     #[serde(default, deserialize_with = "crate::optional_job_id")]
@@ -236,7 +241,7 @@ impl SphinxMcp {
                 job_id: p.job_id,
                 invited: invited.clone(),
                 assessment: None,
-                requires: None,
+                requires: p.requires,
             })
             .await
             .map_err(|e| e.ctx("draft_id", &p.draft_id))?;
@@ -269,10 +274,7 @@ fn review(saved: &Saved) -> Value {
         let left_out = if d.dropped.is_empty() {
             String::new()
         } else {
-            format!(
-                "; {} tests the description did not settle were left out",
-                d.dropped.len()
-            )
+            format!("; {} tests the description did not settle were left out", d.dropped.len())
         };
         format!(
             "a separate solver that read only the description wrote code that passes all {} tests{left_out}",
