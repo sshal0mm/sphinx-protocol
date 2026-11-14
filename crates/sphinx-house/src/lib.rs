@@ -11,8 +11,9 @@
 //! - `POST /newcomer/{id}/deadline` with `{"hours": 24}` sets how long the job
 //!   stays open (1 hour to 30 days).
 //! - `POST /newcomer/{id}/pay` with `{"account": "..."}` answers the
-//!   transactions the buyer's wallet signs: `post_job` with the reward, and
-//!   the drafting fee to the verifier.
+//!   transactions the buyer's wallet signs, in order: the drafting fee to the
+//!   verifier, then `post_job` with the reward. The page sends the fee first
+//!   and posts only once it went through.
 //! - `POST /newcomer/{id}/paid` with both transaction hashes checks them on
 //!   chain and answers the next two: `commit_suite`, and `store_secrets` with
 //!   the hidden suite already encrypted for the enclave under the buyer's
@@ -250,6 +251,15 @@ fn model_down(why: &str) -> bool {
     .any(|m| why.contains(m))
 }
 
+/// Room for gas in what a cross-chain buyer is asked to bring: wallets set
+/// aside a transaction's gas at a pessimistic price while it runs, so the
+/// next one can fail on a balance that is otherwise enough.
+const FUND_GAS_ROOM: u128 = YOCTO / 10;
+
+/// The least asked for the tests' storage deposit when paying from another
+/// chain.
+const TESTS_DEPOSIT_FLOOR: u128 = 150_000_000_000_000_000_000_000;
+
 /// How long a posted job's progress is reused before it is read again.
 const PROGRESS_FRESH: Duration = Duration::from_secs(15);
 
@@ -267,6 +277,9 @@ pub struct House<M: Model> {
     /// Posted jobs' progress as last read, shared by everyone viewing them:
     /// reused for [`PROGRESS_FRESH`], and for good once the job has ended.
     progress: Mutex<HashMap<u64, (Instant, Value, bool)>>,
+    /// Each draft's estimated deposit for storing its tests (yoctoNEAR); the
+    /// suite does not change, so it is priced once.
+    tests_deposits: Mutex<HashMap<String, u128>>,
     http: reqwest::Client,
 }
 
@@ -300,6 +313,7 @@ impl<M: Model + Send + Sync + 'static> House<M> {
             counters: Mutex::new(Counters::default()),
             price: Mutex::new(None),
             progress: Mutex::new(HashMap::new()),
+            tests_deposits: Mutex::new(HashMap::new()),
             http: reqwest::Client::new(),
         }
     }
@@ -713,7 +727,21 @@ impl<M: Model + Send + Sync + 'static> House<M> {
         let account: AccountId = account.parse().map_err(|_| bad("not a NEAR account id"))?;
         let config = self.config().await?;
         let spec_uri = self.store_spec(&draft.spec).await?;
+        let fee = Self::near(&self.terms.drafting_fee_near)?;
         if let Some(job) = self.posted_job(account.as_str(), &spec_uri).await {
+            // Posted but the fee never went through (a wallet that ran short
+            // or closed between the two): ask for the fee alone and go on.
+            if job.status == JobStatus::Draft && record.stage == Stage::Paying {
+                return Ok(json!({
+                    "transactions": [
+                        { "receiverId": config.verifier, "actions": [{ "type": "Transfer", "params": {
+                            "deposit": fee.to_string() } }] },
+                    ],
+                    "posted_job": job.id,
+                    "total_near": format_near(fee),
+                }));
+            }
+            let job = job.id;
             return Err(Refusal::new(
                 StatusCode::CONFLICT,
                 "already_posted",
@@ -722,7 +750,6 @@ impl<M: Model + Send + Sync + 'static> House<M> {
         }
         let reward = Self::near(&record.reward_near)?;
         let bond = Self::near(&self.terms.bond_near)?;
-        let fee = Self::near(&self.terms.drafting_fee_near)?;
         let job_deposit: u128 = config.job_storage_deposit.parse().unwrap_or(0);
         // Bonds times attempts may never exceed the reward.
         let max_total = u32::try_from((reward / bond.max(1)).min(12)).unwrap_or(12).max(1);
@@ -743,13 +770,15 @@ impl<M: Model + Send + Sync + 'static> House<M> {
             r.spec_uri = Some(spec_uri.clone());
             r.error = None;
         });
+        // The fee comes first: the page sends it, waits for it, and only then
+        // posts the job, so a job is never posted without its fee.
         Ok(json!({
             "transactions": [
+                { "receiverId": config.verifier, "actions": [{ "type": "Transfer", "params": {
+                    "deposit": fee.to_string() } }] },
                 { "receiverId": contract, "actions": [{ "type": "FunctionCall", "params": {
                     "methodName": "post_job", "args": post_args,
                     "gas": "50000000000000", "deposit": (reward + job_deposit).to_string() } }] },
-                { "receiverId": config.verifier, "actions": [{ "type": "Transfer", "params": {
-                    "deposit": fee.to_string() } }] },
             ],
             "total_near": format_near(reward + job_deposit + fee),
             "breakdown": {
@@ -782,19 +811,32 @@ impl<M: Model + Send + Sync + 'static> House<M> {
         if post_tx == fee_tx {
             return Err(bad("the job and the fee are two different transactions"));
         }
-        self.unused(id, &[post_tx, fee_tx])?;
         let config = self.config().await?;
         let contract = self.at.escrow.contract_id().to_string();
-        let post = self.tx(post_tx, &account).await?;
-        let call = function_call(&post, &contract, "post_job").ok_or_else(|| {
-            bad("that transaction is not a post_job to the escrow from your account")
-        })?;
-        if call["spec_uri"] != record.spec_uri.clone().unwrap_or_default().as_str() {
-            return Err(bad("that post_job is for a different task"));
-        }
-        let job_id: u64 = success_json(&post)
-            .and_then(|v| v.as_str().and_then(|s| s.parse().ok()))
-            .ok_or_else(|| bad("that post_job did not succeed"))?;
+        let spec_uri = record.spec_uri.clone().unwrap_or_default();
+        let job_id: u64 = if post_tx.is_empty() {
+            // The fee alone, for a job already posted from this account for
+            // this task (pay answered with `posted_job`): the chain says so.
+            self.unused(id, &[fee_tx])?;
+            let job = self
+                .posted_job(&account, &spec_uri)
+                .await
+                .filter(|j| j.status == JobStatus::Draft)
+                .ok_or_else(|| bad("no job from your account waits for this task's fee"))?;
+            job.id.parse().map_err(|_| busy())?
+        } else {
+            self.unused(id, &[post_tx, fee_tx])?;
+            let post = self.tx(post_tx, &account).await?;
+            let call = function_call(&post, &contract, "post_job").ok_or_else(|| {
+                bad("that transaction is not a post_job to the escrow from your account")
+            })?;
+            if call["spec_uri"] != spec_uri.as_str() {
+                return Err(bad("that post_job is for a different task"));
+            }
+            success_json(&post)
+                .and_then(|v| v.as_str().and_then(|s| s.parse().ok()))
+                .ok_or_else(|| bad("that post_job did not succeed"))?
+        };
         let fee = Self::near(&self.terms.drafting_fee_near)?;
         let fee_paid = self.tx(fee_tx, &account).await?;
         if !transfer_of_at_least(&fee_paid, &config.verifier, fee)
@@ -805,7 +847,8 @@ impl<M: Model + Send + Sync + 'static> House<M> {
         self.update(id, |r| {
             r.stage = Stage::Storing;
             r.job_id = Some(job_id);
-            r.txs.extend([post_tx.to_owned(), fee_tx.to_owned()]);
+            r.txs
+                .extend([post_tx, fee_tx].into_iter().filter(|t| !t.is_empty()).map(str::to_owned));
         });
         let record = self.get(id)?;
         self.store_transactions(&record, job_id, &config).await
@@ -876,7 +919,7 @@ impl<M: Model + Send + Sync + 'static> House<M> {
 
     /// The id of a job `account` already posted for `spec_uri`, if any, so a
     /// retried payment never posts a second job.
-    async fn posted_job(&self, account: &str, spec_uri: &str) -> Option<u64> {
+    async fn posted_job(&self, account: &str, spec_uri: &str) -> Option<Job> {
         let mut from = 0u64;
         loop {
             let page: Vec<Job> = self
@@ -885,14 +928,54 @@ impl<M: Model + Send + Sync + 'static> House<M> {
                 .view("list_jobs", json!({ "from": from.to_string(), "limit": 50 }))
                 .await
                 .ok()?;
-            if let Some(j) = page.iter().find(|j| j.buyer == account && j.spec_uri == spec_uri) {
-                return j.id.parse().ok();
+            // A cancelled post does not count: the task may be posted again.
+            if let Some(j) = page.iter().find(|j| {
+                j.buyer == account && j.spec_uri == spec_uri && j.status != JobStatus::Cancelled
+            }) {
+                return Some(j.clone());
             }
             if page.len() < 50 {
                 return None;
             }
             from += 50;
         }
+    }
+
+    /// The deposit OutLayer will ask to store this draft's tests, priced with
+    /// its own `estimate_storage_cost` from the encrypted size plus a fifth,
+    /// and never below [`TESTS_DEPOSIT_FLOOR`]. `None` before the draft is done.
+    async fn tests_deposit(&self, record: &Record) -> Option<u128> {
+        if let Some(d) = self.tests_deposits.lock().ok()?.get(&record.id) {
+            return Some(*d);
+        }
+        let draft = record.draft.as_ref()?;
+        let (suite, reference) = (draft.suite.clone()?, draft.reference.clone()?);
+        let contract = self.at.escrow.contract_id().to_string();
+        let plain =
+            serde_json::to_vec(&secret_values(&contract, 999_999, suite, reference)).ok()?;
+        // Sealed-box encryption adds a few dozen bytes, base64 a third.
+        let encrypted = "A".repeat((plain.len() + 96).div_ceil(3) * 4);
+        let args = json!({
+            "accessor": { "WasmHash": { "hash": "0".repeat(64) } },
+            "profile": "sphinx-job-999999", "owner": contract,
+            "encrypted_secrets_base64": encrypted,
+            "access": sphinx_near::hidden_suite::access_rule(&"0".repeat(64), &self.at.relayer),
+            "vault_id": Value::Null,
+        });
+        let cost: String = sphinx_near::near_api::Contract(self.at.keystore.contract.clone())
+            .call_function("estimate_storage_cost", args)
+            .read_only::<String>()
+            .fetch_from(self.at.escrow.network())
+            .await
+            .ok()?
+            .data;
+        // Never below what real jobs have paid (0.12 NEAR for a 31-test
+        // suite): whatever is left over stays in the buyer's wallet.
+        let deposit = (cost.parse::<u128>().ok()? * 6 / 5).max(TESTS_DEPOSIT_FLOOR);
+        if let Ok(mut d) = self.tests_deposits.lock() {
+            d.insert(record.id.clone(), deposit);
+        }
+        Some(deposit)
     }
 
     /// Checks the buyer's `commit_suite` and `store_secrets`; the house then
@@ -1083,6 +1166,25 @@ impl<M: Model + Send + Sync + 'static> House<M> {
     /// Unknown id.
     pub async fn view(&self, id: &str) -> Result<Value, Refusal> {
         let record = self.get(id)?;
+        // What a buyer paying from another chain needs in their wallet: the
+        // reward, the drafting fee, the escrow's storage deposit, the deposit
+        // for storing the tests, and room for the gas wallets set aside
+        // while each transaction runs. What is left over stays theirs.
+        let tests_deposit = self.tests_deposit(&record).await;
+        let fund = match (
+            Self::near(&record.reward_near),
+            Self::near(&self.terms.drafting_fee_near),
+            self.config().await,
+        ) {
+            (Ok(reward), Ok(fee), Ok(config)) => tests_deposit.map(|t| {
+                reward
+                    + fee
+                    + config.job_storage_deposit.parse::<u128>().unwrap_or(0)
+                    + t
+                    + FUND_GAS_ROOM
+            }),
+            _ => None,
+        };
         let usd = self.usd_per_near().await;
         let fee = &self.terms.drafting_fee_near;
         let to_usd = |near: &str| -> Option<f64> {
@@ -1104,6 +1206,8 @@ impl<M: Model + Send + Sync + 'static> House<M> {
                 "suggested_reward_near": self.terms.suggested_reward_near,
                 "fee_on_payout_percent": 5, "bond_near": self.terms.bond_near,
                 "deadline_hours": self.deadline_hours(&record),
+                "tests_deposit_near": tests_deposit.map(format_near),
+                "fund_near": fund.map(format_near),
             },
             "house_wrote_the_tests": true,
             "tests_revealed": record.tests_revealed,

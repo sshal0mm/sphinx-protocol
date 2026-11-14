@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checkFundRecord, checkPayment, checkStore, checkWithdrawRecord, checkWithdrawal, connectorKeyOk, toYocto, CONNECTOR_ALLOWANCE, type WalletTx } from './checks'
+import { checkFee, checkFundRecord, checkPayment, checkStore, checkWithdrawRecord, checkWithdrawal, connectorKeyOk, toYocto, CONNECTOR_ALLOWANCE, type WalletTx } from './checks'
 
 const N = 10n ** 24n
 const call = (methodName: string, args: Record<string, unknown>, deposit: string) =>
@@ -21,8 +21,15 @@ describe('checkPayment', () => {
     { receiverId: 'escrow.near', actions: [call('post_job', { reward: (N / 2n).toString() }, (N / 2n + N / 40n).toString())] },
     { receiverId: 'v.near', actions: [{ type: 'Transfer', params: { deposit: (N / 20n).toString() } }] }
   ]
-  it('accepts exactly the payment shown', () => {
+  it('accepts exactly the payment shown, in either order', () => {
     expect(() => checkPayment(good(), want)).not.toThrow()
+    expect(() => checkPayment([...good()].reverse(), want)).not.toThrow()
+  })
+  it('takes the fee alone only to the verifier and only the fee', () => {
+    const fee = good()[1]!
+    expect(() => checkFee([fee], want)).not.toThrow()
+    expect(() => checkFee([{ ...fee, receiverId: 'thief.near' }], want)).toThrow()
+    expect(() => checkFee([fee, fee], want)).toThrow()
   })
   it('refuses a storage deposit or drafting fee above their caps', () => {
     const big = { ...want, fee: N }

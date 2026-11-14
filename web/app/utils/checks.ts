@@ -49,20 +49,28 @@ export const MAX_JOB_STORAGE = 50_000_000_000_000_000_000_000n
 export const MAX_DRAFTING_FEE = 100_000_000_000_000_000_000_000n
 
 /**
- * Posting a drafted job: exactly two transactions, `post_job` to the escrow
- * with the reward shown and a deposit of that reward plus the escrow's
- * storage deposit, and the drafting fee as a plain transfer to the escrow's
- * verifier.
+ * Posting a drafted job: exactly two transactions, the drafting fee as a
+ * plain transfer to the escrow's verifier, and `post_job` to the escrow with
+ * the reward shown and a deposit of that reward plus the escrow's storage
+ * deposit. The page sends the fee first and posts only once it went through.
  */
 export function checkPayment(txs: WalletTx[], want: { contract: string, verifier: string, reward: bigint, storage: bigint, fee: bigint }) {
-  const [post, fee] = txs
-  if (txs.length !== 2 || !post || !fee) throw refused('a payment')
   if (want.storage < 0n || want.storage > MAX_JOB_STORAGE || want.fee < 0n || want.fee > MAX_DRAFTING_FEE) throw refused('a payment')
+  const fee = txs.find(t => t.receiverId === want.verifier)
+  const post = txs.find(t => t.receiverId === want.contract)
+  if (txs.length !== 2 || !post || !fee || post === fee) throw refused('a payment')
+  checkFee([fee], want)
   const p = only(post)
-  const f = only(fee)
-  if (post.receiverId !== want.contract || p.type !== 'FunctionCall' || p.params.methodName !== 'post_job'
+  if (p.type !== 'FunctionCall' || p.params.methodName !== 'post_job'
     || amount(p.params.args?.reward) !== want.reward
     || amount(p.params.deposit) !== want.reward + want.storage) throw refused('a payment')
+}
+
+/** The drafting fee alone: one plain transfer of exactly the fee to the verifier. */
+export function checkFee(txs: WalletTx[], want: { verifier: string, fee: bigint }) {
+  const [fee, ...rest] = txs
+  if (!fee || rest.length || want.fee < 0n || want.fee > MAX_DRAFTING_FEE) throw refused('a payment')
+  const f = only(fee)
   if (fee.receiverId !== want.verifier || f.type !== 'Transfer' || amount(f.params.deposit) !== want.fee) throw refused('a payment')
 }
 

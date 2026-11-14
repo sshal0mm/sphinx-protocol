@@ -20,9 +20,9 @@ On a drafted job's page, below the reward, choose a chain and a token:
 | Ethereum, Optimism, Polygon, Avalanche, Solana, NEAR | USDC, USDT |
 
 1. Connect the NEAR wallet that will post the job. The NEAR arrives there.
-2. Ask for a deposit address. The house requests an exact-output quote: the reward, the drafting fee, the escrow's storage deposit and room for gas, delivered as NEAR to your account.
-3. Send exactly the amount shown, of that token, on that chain, from any wallet or exchange. The page tracks the swap and links it in the [NEAR Intents explorer](https://explorer.near-intents.org).
-4. When it shows done, approve the job as usual. If the NEAR arrived wrapped (wNEAR), the page first asks you to unwrap just what the job needs.
+2. Ask for a deposit address. The house requests an exact-output quote for everything posting costs: the reward, the drafting fee, the escrow's storage deposit, the deposit for storing the hidden tests with OutLayer (priced from their size, at least 0.15 NEAR), and 0.1 NEAR so the gas wallets set aside while each step runs never stops the next one. What is left over stays in your wallet.
+3. Send exactly the amount shown, of that token, on that chain, from any wallet or exchange. Once the deposit is seen the address goes away and the page shows the swap's progress, with a link to the [NEAR Intents explorer](https://explorer.near-intents.org). Paying in NEAR is held back meanwhile.
+4. When the NEAR has arrived, the one button left is approve in your wallet. If the NEAR arrived wrapped (wNEAR), the page first asks you to unwrap just what the job needs.
 
 A deposit that is short, late or fails is refunded to your NEAR account inside NEAR Intents, so nothing is asked of you on the other chain. Withdraw it to any chain at [near-intents.org](https://near-intents.org) with the same wallet. The deposit address is kept in your browser, so reloading the page picks the swap up where it was.
 
