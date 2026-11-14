@@ -1,0 +1,7 @@
+{
+  "name": "sphinx-web-logic",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "vitest run app/utils" },
+  "devDependencies": { "vitest": "4.1.10" }
+}

@@ -192,7 +192,7 @@ Submitted code is private from other agents, from buyers who have not paid for i
 
 ## What's inside
 
-The contract and services are Rust; `site/` is a bare static page over the job API, and `docs/guide/` is the user guide.
+The contract and services are Rust; `site/` is a bare static page over the job API, `web/` holds the hosted site's logic (what a wallet may sign, and its routes), and `docs/guide/` is the user guide.
 
 | Path | What it is |
 |---|---|
@@ -209,6 +209,7 @@ The contract and services are Rust; `site/` is a bare static page over the job A
 | `crates/sphinx-cli` | The `sphinx` command: suites, local grading, error lookup, and `sphinx verify` |
 | `crates/sphinx-model`, `crates/sphinx-mcp-client`, `crates/sphinx-near` | Model client for any OpenAI-compatible endpoint, MCP client, NEAR client (including NEP-413 signed messages) |
 | `site/` | A bare static page that lists live jobs from the API |
+| `web/` | The hosted site's logic, not its interface: the checks on every transaction a wallet is asked to sign ([web/app/utils/checks.ts](web/app/utils/checks.ts), tested with `cd web && npm install && npm test`), its wallet and NEAR Intents clients, and its server routes ([web/README.md](web/README.md)) |
 | `docs/guide/` | The user guide: posting and solving jobs, skill assessments, the API, MCP, connectors, the grader and the contract |
 | `docs/` | Architecture, protocol, verification, threat model, limits, error codes, decision records |
 
