@@ -101,7 +101,10 @@ async fn run() -> Result<(), String> {
         at.rpc.clone(),
         at.rpc_keys.clone(),
     ));
-    let house = Arc::new(House::new(model, at, dir, terms, caps));
+    // Each draft is checked by models other than its author's: the same
+    // NEAR AI TEE models, started further along.
+    let (checker, tiebreak) = (model.rotated(1), model.rotated(2));
+    let house = Arc::new(House::new(model, at, dir, terms, caps).with_checkers(checker, tiebreak));
     let checker = house.clone();
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(std::time::Duration::from_secs(300));
@@ -124,6 +127,10 @@ async fn run() -> Result<(), String> {
         loop {
             tick.tick().await;
             doctor.model.check_health().await;
+            if let Some((checker, tiebreak)) = &doctor.checkers {
+                checker.check_health().await;
+                tiebreak.check_health().await;
+            }
         }
     });
     // Tests a buyer did not publish are forgotten a week after the job ends.

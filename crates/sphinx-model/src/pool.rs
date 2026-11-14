@@ -83,6 +83,17 @@ impl Pool {
         Some(Self::new(models))
     }
 
+    /// The same models in another order, starting `by` places later: a
+    /// checker that starts on a different model from the author's, with the
+    /// same attestations and fallbacks.
+    #[must_use]
+    pub fn rotated(&self, by: usize) -> Self {
+        let mut models = self.models.clone();
+        let n = models.len();
+        models.rotate_left(by % n);
+        Self::new(models)
+    }
+
     /// The model in use now.
     pub fn current(&self) -> &NearAiCloud {
         let i = self.active.load(Ordering::Relaxed).min(self.models.len() - 1);

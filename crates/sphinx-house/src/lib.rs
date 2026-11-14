@@ -267,6 +267,9 @@ const PROGRESS_FRESH: Duration = Duration::from_secs(15);
 #[allow(missing_debug_implementations, reason = "holds a model client")]
 pub struct House<M: Model> {
     pub model: M,
+    /// Models that check each draft (a checker that solves it from the text
+    /// alone, and a tie-breaker), preferably not the author's.
+    pub checkers: Option<(M, M)>,
     pub at: Endpoints,
     pub dir: PathBuf,
     pub terms: Terms,
@@ -305,6 +308,7 @@ impl<M: Model + Send + Sync + 'static> House<M> {
         }
         Self {
             model,
+            checkers: None,
             at,
             dir,
             terms,
@@ -316,6 +320,13 @@ impl<M: Model + Send + Sync + 'static> House<M> {
             tests_deposits: Mutex::new(HashMap::new()),
             http: reqwest::Client::new(),
         }
+    }
+
+    /// Checks drafts with other models (see [`House::checkers`]).
+    #[must_use]
+    pub fn with_checkers(mut self, checker: M, tiebreak: M) -> Self {
+        self.checkers = Some((checker, tiebreak));
+        self
     }
 
     fn save(&self, record: &Record) {
@@ -481,7 +492,12 @@ impl<M: Model + Send + Sync + 'static> House<M> {
     fn spawn_draft(self: &Arc<Self>, id: String, request: String) {
         let house = Arc::clone(self);
         tokio::spawn(async move {
-            let concierge = Concierge::new(&house.model);
+            let concierge = match &house.checkers {
+                Some((checker, tiebreak)) => {
+                    Concierge::new(&house.model).with_checkers(checker, tiebreak)
+                }
+                None => Concierge::new(&house.model),
+            };
             let progress_id = id.clone();
             let result = concierge
                 .draft(&request, &mut |p| {
@@ -496,6 +512,7 @@ impl<M: Model + Send + Sync + 'static> House<M> {
                         d.second_opinion.agreed,
                         d.second_opinion.total,
                         d.differences.len(),
+                        d.dropped.len(),
                     );
                     let view = DraftView {
                         title: d.title,
@@ -1381,21 +1398,41 @@ pub fn describe(p: &Progress) -> String {
         Progress::Reviewing { round, differences } => {
             format!("Making {differences} unclear cases in the task text precise (round {round})")
         }
+        Progress::Dropped { tests } => {
+            format!("Leaving out {tests} tests the task text does not settle")
+        }
+        Progress::ReferenceReplaced { tests } => {
+            format!("Two other AI models agreed on {tests} answers the first draft got wrong, so their reading sets the expected answers")
+        }
+        Progress::FinalCheck => {
+            "Checking that another AI model, reading only the task text, passes every hidden test".to_owned()
+        }
     }
 }
 
 /// The checks, in plain English: each one line (two at most, split by a
 /// full stop), with no final full stop.
-pub fn checks(tests: usize, agreed: usize, total: usize, differences: usize) -> Vec<String> {
+pub fn checks(
+    tests: usize,
+    agreed: usize,
+    total: usize,
+    differences: usize,
+    dropped: usize,
+) -> Vec<String> {
     let mut out = vec![
         format!("We wrote {tests} hidden tests from your words, and agents only ever learn how many they pass"),
         "Sphinx's reference answer passes every test, which proves the job can be done, and the enclave checks that again before the job opens".to_owned(),
     ];
     out.push(if differences == 0 {
-        format!("A separate checking run read only the task text and agreed with the expected answers on all {total} tests, so the task says what the tests check")
+        format!("A separate AI solver read only the task text, wrote its own solution, and it passes all {total} hidden tests, so an honest agent can pass this job")
     } else {
         format!("Separate checking runs disagreed with the expected answers on {} of {total} tests, so honest agents could fail this draft. Say exactly what you want and we redraft it", total - agreed)
     });
+    if dropped > 0 {
+        out.push(format!(
+            "{dropped} tests the task text did not settle were left out, so no hidden test rests on a rule the text does not state"
+        ));
+    }
     out.push("Your reward pays only for code that passes every test, and comes back to you if nobody does by the deadline".to_owned());
     out
 }
@@ -1638,9 +1675,11 @@ mod tests {
 
     #[test]
     fn checks_say_when_the_solvers_disagreed() {
-        assert!(checks(12, 12, 12, 0)[2].contains("all 12 tests"));
-        assert!(checks(12, 10, 12, 2)[2]
+        assert!(checks(12, 12, 12, 0, 0)[2].contains("all 12 hidden tests"));
+        assert!(checks(12, 10, 12, 2, 0)[2]
             .contains("on 2 of 12 tests, so honest agents could fail this draft"));
+        let left_out = checks(20, 20, 20, 0, 3);
+        assert!(left_out[3].contains("3 tests the task text did not settle were left out"));
     }
 
     #[test]

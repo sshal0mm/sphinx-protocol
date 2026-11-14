@@ -83,6 +83,14 @@ pub enum Progress {
     ThirdOpinion,
     /// Asking the model to settle the differences.
     Reviewing { round: u32, differences: usize },
+    /// Leaving out tests the task text did not settle.
+    Dropped { tests: usize },
+    /// Two other models agreed against the reference on `tests` inputs, so
+    /// the reference was replaced by the second model's code.
+    ReferenceReplaced { tests: usize },
+    /// Checking that a solution another model wrote from the final task text
+    /// passes every hidden test.
+    FinalCheck,
 }
 
 /// How a fresh solver that read only the description compares with the reference.
@@ -125,8 +133,13 @@ pub struct Draft {
     /// Inputs the second opinion still answers differently, and disputed
     /// inputs a redraft dropped instead of settling. They are hidden test
     /// inputs, so they are shown only to the buyer. A draft with any is not
-    /// posted.
+    /// posted. [`Concierge::draft`] leaves these out of the suite instead
+    /// (see `dropped`), so a finished draft has none.
     pub differences: Vec<Difference>,
+    /// Tests left out because the checks could not settle them from the task
+    /// text: no hidden test rests on a rule the text does not state.
+    #[serde(default)]
+    pub dropped: Vec<Difference>,
     /// Whether the task text was rewritten while settling differences, so
     /// the buyer reads the final text rather than the first one.
     #[serde(default)]
@@ -157,6 +170,32 @@ fn indices_or_none<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<usize>,
             a.iter().filter_map(|i| i.as_u64().and_then(|i| usize::try_from(i).ok())).collect()
         })
         .unwrap_or_default())
+}
+
+/// How many times a solver is asked before its run counts as no answer.
+const SOLVE_ATTEMPTS: usize = 3;
+
+/// Fresh pairs of solutions asked for when no earlier run passes the final suite.
+const FINAL_ATTEMPTS: usize = 2;
+
+/// At most one test in this many may be left out as unsettled; more means the
+/// text does not say enough, and the buyer is asked to say it.
+const MAX_DROPPED_PARTS: usize = 4;
+
+/// Whether the second and third readings gave the same answer on a disputed input.
+fn two_agree(d: &Difference) -> bool {
+    d.third_opinion.as_ref().is_some_and(|t| sphinx_grader::values_equal(t, &d.second_opinion))
+}
+
+/// Whether a third reading agrees with the reference on a disputed input.
+fn settled_by_third(d: &Difference) -> bool {
+    d.third_opinion.as_ref().is_some_and(|t| sphinx_grader::values_equal(t, &d.reference))
+}
+
+/// Whether `code` mentions a function named `entry` (a cheap check; the
+/// grader still decides whether it runs).
+fn defines(code: &str, entry: &str) -> bool {
+    code.contains(entry)
 }
 
 #[derive(Debug, Deserialize)]
@@ -298,6 +337,31 @@ fn render_spec(w: &Written, outputs: &[Value]) -> String {
     spec
 }
 
+/// Keeps the tests marked in `keep`, and the shown examples among them;
+/// when an example is left out, the first kept test with a non-null answer
+/// takes its place, so the task still shows three examples.
+fn retain_tests(w: &mut Written, outputs: &mut Vec<Value>, keep: &[bool]) {
+    let mut new_index = Vec::with_capacity(keep.len());
+    let mut n = 0;
+    for &k in keep {
+        new_index.push(k.then_some(n));
+        n += usize::from(k);
+    }
+    let mut examples: Vec<usize> =
+        w.examples.iter().filter_map(|&i| new_index.get(i).copied().flatten()).collect();
+    let mut i = 0;
+    w.inputs = w.inputs.drain(..).zip(keep).filter(|(_, k)| **k).map(|(a, _)| a).collect();
+    *outputs = outputs.drain(..).zip(keep).filter(|(_, k)| **k).map(|(o, _)| o).collect();
+    let wanted = w.examples.len().max(1).min(w.inputs.len());
+    while examples.len() < wanted && i < outputs.len() {
+        if !examples.contains(&i) && !outputs[i].is_null() {
+            examples.push(i);
+        }
+        i += 1;
+    }
+    w.examples = examples;
+}
+
 fn suite_json(entry: &str, inputs: &[Vec<Value>], outputs: &[Value]) -> String {
     let tests: Vec<Value> = inputs
         .iter()
@@ -337,15 +401,53 @@ fn looks_double_encoded(inputs: &[Vec<Value>]) -> bool {
 #[derive(Debug)]
 pub struct Concierge<'a, M: Model> {
     model: &'a M,
+    /// Reads only the task text and writes its own solution: preferably a
+    /// different model from the author, so it cannot share the author's
+    /// unstated assumptions.
+    checker: Option<&'a M>,
+    /// Breaks ties between the author and the checker: a third model.
+    tiebreak: Option<&'a M>,
 }
 
 impl<'a, M: Model> Concierge<'a, M> {
     pub fn new(model: &'a M) -> Self {
-        Self { model }
+        Self { model, checker: None, tiebreak: None }
+    }
+
+    /// Checks drafts with other models: `checker` solves each draft from its
+    /// text alone, `tiebreak` settles inputs the two answer differently.
+    #[must_use]
+    pub fn with_checkers(mut self, checker: &'a M, tiebreak: &'a M) -> Self {
+        self.checker = Some(checker);
+        self.tiebreak = Some(tiebreak);
+        self
     }
 
     async fn ask(&self, messages: &[Message]) -> Result<String, SphinxError> {
         self.model.complete(messages).await.map_err(|e| model_failed(&e))
+    }
+
+    /// A solution written by `model` from the task text alone.
+    ///
+    /// A reply that holds no code, or code that does not define the entry
+    /// point, is asked for again: it says nothing about the task text, and
+    /// counting it as a disagreement on every test would send the author
+    /// rewriting a correct draft.
+    async fn solve_with(&self, model: &M, spec: &str, entry: &str) -> Result<Option<String>, SphinxError> {
+        let mut messages = vec![Message::system(SOLVER), Message::user(spec.to_owned())];
+        for _ in 0..SOLVE_ATTEMPTS {
+            let reply = model.complete(&messages).await.map_err(|e| model_failed(&e))?;
+            let why = match json_object::<Solved>(&reply) {
+                Ok(s) if defines(&s.code, entry) => return Ok(Some(s.code)),
+                Ok(_) => format!("Your code does not define a function named `{entry}`"),
+                Err(why) => why,
+            };
+            messages.push(Message::assistant(reply));
+            messages.push(Message::user(format!(
+                "{why}. Reply again with only the JSON object {{\"entry\": \"{entry}\", \"code\": \"the complete code\"}}, valid JSON."
+            )));
+        }
+        Ok(None)
     }
 
     /// Asks until the reference runs on every input; returns the draft and its outputs.
@@ -454,9 +556,12 @@ impl<'a, M: Model> Concierge<'a, M> {
     }
 
     /// A fresh solver's code for `spec`, or `None` if it gave no usable code.
-    async fn second_opinion(&self, spec: &str) -> Result<Option<String>, SphinxError> {
-        let reply = self.ask(&[Message::system(SOLVER), Message::user(spec.to_owned())]).await?;
-        Ok(json_object::<Solved>(&reply).ok().map(|s| s.code))
+    async fn second_opinion(&self, spec: &str, entry: &str) -> Result<Option<String>, SphinxError> {
+        self.solve_with(self.checker.unwrap_or(self.model), spec, entry).await
+    }
+
+    async fn third_opinion(&self, spec: &str, entry: &str) -> Result<Option<String>, SphinxError> {
+        self.solve_with(self.tiebreak.or(self.checker).unwrap_or(self.model), spec, entry).await
     }
 
     /// Drafts a job for `request`.
@@ -464,6 +569,7 @@ impl<'a, M: Model> Concierge<'a, M> {
     /// # Errors
     /// `SPHINX_E_CONCIERGE_MODEL_UNAVAILABLE` when the model fails, and
     /// `SPHINX_E_CONCIERGE_NO_DRAFT` when no reference runs on every input.
+    #[allow(clippy::too_many_lines, reason = "one pass: write, check, settle, leave out, gate")]
     pub async fn draft(
         &self,
         request: &str,
@@ -478,7 +584,8 @@ impl<'a, M: Model> Concierge<'a, M> {
         let (mut written, mut outputs) = self.write(&mut conversation, progress).await?;
         let mut spec = render_spec(&written, &outputs);
         progress(Progress::SecondOpinion);
-        let mut solver = self.second_opinion(&spec).await?;
+        let mut solver = self.second_opinion(&spec, &written.entry).await?;
+        let mut third: Option<String> = None;
         let mut rounds = 0;
         let mut differences;
         // Every input ever disputed, with the answers at the time, so a
@@ -496,28 +603,82 @@ impl<'a, M: Model> Concierge<'a, M> {
                 agreed: written.inputs.len() - differences.len(),
                 total: written.inputs.len(),
             });
+            if !differences.is_empty() {
+                progress(Progress::ThirdOpinion);
+                third = self.third_opinion(&spec, &written.entry).await?;
+                break_ties(&written.entry, &mut differences, third.as_deref());
+                // Where a third model, reading only the task text, lands on
+                // the reference's answer, two readings of three back it: the
+                // second run misread, not the text.
+                differences.retain(|d| !settled_by_third(d));
+            }
             if differences.is_empty() || rounds == REVIEW_ROUNDS {
                 break;
             }
             rounds += 1;
-            progress(Progress::ThirdOpinion);
-            let third = self.second_opinion(&spec).await?;
-            break_ties(&written.entry, &mut differences, third.as_deref());
             progress(Progress::Reviewing { round: rounds, differences: differences.len() });
             conversation.push(Message::user(review_prompt(&written.entry, &differences)));
-            let before = written.description.clone();
             (written, outputs) = self.write(&mut conversation, progress).await?;
             spec = render_spec(&written, &outputs);
-            if written.description != before || solver.is_none() {
-                progress(Progress::SecondOpinion);
-                solver = self.second_opinion(&spec).await?;
+            // A fresh reading every round, so one bad run cannot keep a
+            // correct test disputed.
+            progress(Progress::SecondOpinion);
+            solver = self.second_opinion(&spec, &written.entry).await?;
+        }
+        // When two other models, each reading only the task text, agree with
+        // each other against the reference on every input still disputed,
+        // and the author would not change it, the reference is what misread
+        // the text: the second model's code becomes the reference and every
+        // expected answer is recomputed from it. Agents read the same text.
+        let mut adopted = false;
+        if !differences.is_empty() && differences.iter().all(two_agree) {
+            if let Some(code) = solver.as_deref() {
+                let results = run_all(code, &written.entry, &written.inputs);
+                if results.iter().all(|r| matches!(r, Evaluation::Returned(_))) {
+                    progress(Progress::ReferenceReplaced { tests: differences.len() });
+                    outputs = results
+                        .into_iter()
+                        .map(|r| match r {
+                            Evaluation::Returned(v) => v,
+                            _ => Value::Null,
+                        })
+                        .collect();
+                    written.reference = code.to_owned();
+                    spec = render_spec(&written, &outputs);
+                    differences.clear();
+                    adopted = true;
+                }
             }
         }
+        let mut dropped: Vec<Difference> = Vec::new();
         for mut d in disputed {
             if !written.inputs.contains(&d.args) {
                 d.reference = Value::String("dropped by the redraft".into());
-                differences.push(d);
+                dropped.push(d);
             }
+        }
+        // No hidden test may rest on something the task text does not settle:
+        // inputs the checks still dispute after the review rounds are left
+        // out, as long as enough tests remain to grade the job and most of
+        // what the buyer asked for is still tested.
+        if !differences.is_empty() {
+            let unsettled: Vec<Vec<Value>> = differences.iter().map(|d| d.args.clone()).collect();
+            let keep: Vec<bool> = written.inputs.iter().map(|a| !unsettled.contains(a)).collect();
+            let left = keep.iter().filter(|k| **k).count();
+            if left < MIN_TESTS || unsettled.len() * MAX_DROPPED_PARTS > written.inputs.len() {
+                return Err(no_draft(
+                    rounds,
+                    &format!(
+                        "the task text left {} of {} tests unsettled; say more precisely what you want",
+                        unsettled.len(),
+                        written.inputs.len()
+                    ),
+                ));
+            }
+            progress(Progress::Dropped { tests: unsettled.len() });
+            retain_tests(&mut written, &mut outputs, &keep);
+            spec = render_spec(&written, &outputs);
+            dropped.append(&mut differences);
         }
         let suite = suite_json(&written.entry, &written.inputs, &outputs);
         let score = sphinx_grader::local_score(&suite, &written.reference, 0)?;
@@ -525,6 +686,33 @@ impl<'a, M: Model> Concierge<'a, M> {
             return Err(SphinxError::new(
                 Code::InternalInvariant,
                 "the reference does not pass the suite computed from it",
+            ));
+        }
+        // The last word: code another model wrote from the task text alone
+        // passes every hidden test, so an honest agent can pass this job.
+        // The runs already made are tried first, then fresh ones on the
+        // final text.
+        progress(Progress::FinalCheck);
+        let passes = |code: Option<&str>| {
+            code.is_some_and(|c| {
+                sphinx_grader::local_score(&suite, c, 0).is_ok_and(|s| s.passed == s.total)
+            })
+        };
+        // A solver whose code became the reference does not count as its own check.
+        let mut independent =
+            (!adopted && passes(solver.as_deref())) || passes(third.as_deref());
+        for _ in 0..FINAL_ATTEMPTS {
+            if independent {
+                break;
+            }
+            let fresh = self.second_opinion(&spec, &written.entry).await?;
+            independent = passes(fresh.as_deref())
+                || passes(self.third_opinion(&spec, &written.entry).await?.as_deref());
+        }
+        if !independent {
+            return Err(no_draft(
+                rounds,
+                "no independent solution written from the task text passes every test",
             ));
         }
         Ok(Draft {
@@ -540,6 +728,7 @@ impl<'a, M: Model> Concierge<'a, M> {
                 rounds,
             },
             differences,
+            dropped,
             spec,
             suite,
             reference: written.reference,
@@ -593,11 +782,7 @@ fn review_prompt(entry: &str, differences: &[Difference]) -> String {
         .take(SHOWN_DIFFERENCES)
         .map(|d| {
             let call = call_text(entry, &d.args);
-            let two_agree = d
-                .third_opinion
-                .as_ref()
-                .is_some_and(|t| sphinx_grader::values_equal(t, &d.second_opinion));
-            if two_agree {
+            if two_agree(d) {
                 format!(
                     "{call} — two separate solver runs both answered {}; your reference answered {}",
                     d.second_opinion, d.reference
@@ -764,40 +949,183 @@ mod tests {
             solved("function double(n){ return n < 12 ? 2 * n : 0 }"),
             // The redraft keeps the reference and quietly drops 12 and 13.
             written_with("function double(n){ return n * 2 }", "Write `double(n)`.", 12),
+            solved("function double(n){ return n * 2 }"),
         ]);
         let d = Concierge::new(&model).draft("double", &mut |_| {}).await.unwrap();
         assert_eq!(d.tests, 12);
-        let dropped: Vec<_> = d.differences.iter().map(|x| x.args.clone()).collect();
+        let dropped: Vec<_> = d.dropped.iter().map(|x| x.args.clone()).collect();
         assert_eq!(dropped, [vec![json!(12)], vec![json!(13)]]);
-        assert!(d.differences.iter().all(|x| x.reference == "dropped by the redraft"));
+        assert!(d.dropped.iter().all(|x| x.reference == "dropped by the redraft"));
+        assert_eq!(d.differences, Vec::<Difference>::new());
         assert!(!d.task_rewritten);
     }
 
     #[tokio::test]
-    async fn unsettled_differences_are_reported_not_hidden() {
-        let reference = written("function double(n){ return n * 2 }", "Write `double`.");
-        let wrong = solved("function double(n){ return n === 0 ? 1 : n * 2 }");
-        // The tie-breaker sides with the reference every round.
-        let third = solved("function double(n){ return 2 * n }");
+    async fn a_third_reading_that_backs_the_reference_keeps_the_test() {
         let model = Scripted::new([
-            reference.clone(),
-            wrong.clone(),
-            third.clone(),
-            reference.clone(),
-            third.clone(),
-            reference.clone(),
-            third,
-            reference,
+            written("function double(n){ return n * 2 }", "Write `double`."),
+            // The second run misreads 0; the third reads it as the reference does.
+            solved("function double(n){ return n === 0 ? 1 : n * 2 }"),
+            solved("function double(n){ return 2 * n }"),
         ]);
         let d = Concierge::new(&model).draft("double", &mut |_| {}).await.unwrap();
-        let last = model.seen.lock().unwrap()[7].last().unwrap().content.clone();
+        assert_eq!((d.tests, d.second_opinion.rounds), (14, 0));
+        assert_eq!(d.dropped, Vec::<Difference>::new());
+        assert!(d.suite.contains("[0]"), "{}", d.suite);
+        assert_eq!(model.seen.lock().unwrap().len(), 3, "no review round was needed");
+    }
+
+    #[tokio::test]
+    async fn unsettled_tests_are_left_out_not_posted() {
+        let reference = written("function double(n){ return n * 2 }", "Write `double`.");
+        // Three readings, three answers for 0, every round.
+        let second = solved("function double(n){ return n === 0 ? 1 : n * 2 }");
+        let third = solved("function double(n){ return n === 0 ? 2 : n * 2 }");
+        let mut script = Vec::new();
+        for _ in 0..=REVIEW_ROUNDS {
+            script.extend([reference.clone(), second.clone(), third.clone()]);
+        }
+        let model = Scripted::new(script);
+        let d = Concierge::new(&model).draft("double", &mut |_| {}).await.unwrap();
+        let last = model.seen.lock().unwrap()[9].last().unwrap().content.clone();
         assert!(
-            last.contains("your reference: 0, a second solver: 1, a third solver: 0"),
+            last.contains("your reference: 0, a second solver: 1, a third solver: 2"),
             "{last}"
         );
-        assert_eq!((d.second_opinion.agreed, d.second_opinion.rounds), (13, REVIEW_ROUNDS));
-        assert_eq!(d.differences.len(), 1);
-        assert_eq!(d.differences[0].args, [json!(0)]);
+        assert_eq!(d.second_opinion.rounds, REVIEW_ROUNDS);
+        // The one input the checks never settled is not a hidden test.
+        assert_eq!(d.differences, Vec::<Difference>::new());
+        assert_eq!(d.dropped.len(), 1);
+        assert_eq!(d.dropped[0].args, [json!(0)]);
+        assert_eq!(d.tests, 13);
+        assert!(!d.suite.contains("[0]"), "{}", d.suite);
+        assert_eq!(
+            sphinx_grader::local_score(
+                &d.suite,
+                "function double(n){ return n === 0 ? 1 : n * 2 }",
+                0
+            )
+            .unwrap()
+            .passed,
+            13
+        );
+    }
+
+    #[tokio::test]
+    async fn two_models_agreeing_against_a_stubborn_reference_set_the_answers() {
+        // The author keeps a reference that is wrong on 3; both other
+        // readings get 3 right, every round.
+        let reference = written("function double(n){ return n === 3 ? 0 : n * 2 }", "Write `double`.");
+        let second = solved("function double(n){ return n * 2 }");
+        let third = solved("function double(n){ return 2 * n }");
+        let mut script = Vec::new();
+        for _ in 0..=REVIEW_ROUNDS {
+            script.extend([reference.clone(), second.clone(), third.clone()]);
+        }
+        let model = Scripted::new(script);
+        let mut seen = Vec::new();
+        let d = Concierge::new(&model).draft("double", &mut |p| seen.push(p)).await.unwrap();
+        assert!(seen.contains(&Progress::ReferenceReplaced { tests: 1 }), "{seen:?}");
+        assert_eq!((d.tests, d.dropped.len()), (14, 0));
+        assert_eq!(d.reference, "function double(n){ return n * 2 }");
+        assert_eq!(
+            sphinx_grader::local_score(&d.suite, "function double(n){ return n + n }", 0).unwrap().passed,
+            14
+        );
+    }
+
+    #[tokio::test]
+    async fn no_draft_when_too_many_tests_would_be_left_out() {
+        let reference = written("function double(n){ return n * 2 }", "Write `double`.");
+        // 0 to 3 (4 of 14, over a quarter) never settle.
+        let second = solved("function double(n){ return n < 4 ? -1 : n * 2 }");
+        let third = solved("function double(n){ return n < 4 ? -2 : n * 2 }");
+        let mut script = Vec::new();
+        for _ in 0..=REVIEW_ROUNDS {
+            script.extend([reference.clone(), second.clone(), third.clone()]);
+        }
+        let model = Scripted::new(script);
+        let e = Concierge::new(&model).draft("double", &mut |_| {}).await.unwrap_err();
+        assert_eq!(e.code(), Code::ConciergeNoDraft);
+    }
+
+    #[tokio::test]
+    async fn a_reply_without_code_is_asked_again_not_counted_as_disagreement() {
+        let author = Scripted::new([written("function double(n){ return n * 2 }", "Write `double`.")]);
+        let checker = Scripted::new([
+            "I think the answer is to multiply by two.".to_owned(),
+            solved("function double(n){ return n + n }"),
+        ]);
+        let tiebreak = Scripted::new(Vec::<String>::new());
+        let mut seen = Vec::new();
+        let d = Concierge::new(&author)
+            .with_checkers(&checker, &tiebreak)
+            .draft("double", &mut |p| seen.push(p))
+            .await
+            .unwrap();
+        assert_eq!((d.second_opinion.agreed, d.second_opinion.rounds), (14, 0));
+        assert!(seen.contains(&Progress::Compared { agreed: 14, total: 14 }), "{seen:?}");
+        assert_eq!(checker.seen.lock().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn the_final_check_asks_again_when_no_earlier_run_passes_everything() {
+        let author = Scripted::new([written("function double(n){ return n * 2 }", "Write `double`.")]);
+        // The second run misreads 0; the third backs the reference on 0 but
+        // misreads 5, which only it gets wrong. Neither passes every test,
+        // so a fresh run is asked for, and it does.
+        let checker = Scripted::new([
+            solved("function double(n){ return n === 0 ? 1 : n * 2 }"),
+            solved("function double(n){ return n * 2 }"),
+        ]);
+        let tiebreak = Scripted::new([solved("function double(n){ return n === 5 ? 0 : n * 2 }")]);
+        let mut seen = Vec::new();
+        let d = Concierge::new(&author)
+            .with_checkers(&checker, &tiebreak)
+            .draft("double", &mut |p| seen.push(p))
+            .await
+            .unwrap();
+        assert_eq!(d.tests, 14);
+        assert!(seen.contains(&Progress::FinalCheck));
+        assert_eq!(checker.seen.lock().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn another_model_checks_the_draft_and_must_pass_it() {
+        // The author drafts; a separate checker model solves from the text.
+        let author = Scripted::new([written(
+            "function double(n){ return n * 2 }",
+            "Write `function double(n)`.",
+        )]);
+        let checker = Scripted::new([solved("function double(n){ return n + n }")]);
+        let tiebreak = Scripted::new(Vec::<String>::new());
+        let d = Concierge::new(&author)
+            .with_checkers(&checker, &tiebreak)
+            .draft("double", &mut |_| {})
+            .await
+            .unwrap();
+        assert_eq!((d.tests, d.second_opinion.agreed), (14, 14));
+        assert_eq!(checker.seen.lock().unwrap().len(), 1, "the checker, not the author, solved it");
+        assert_eq!(author.seen.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn no_draft_when_no_independent_solution_passes() {
+        // A checker that never writes working code: nothing settles, so too
+        // few tests would be left and nothing is posted.
+        let author =
+            Scripted::new(vec![
+                written("function double(n){ return n * 2 }", "Write `double`.");
+                8
+            ]);
+        let checker = Scripted::new(vec![solved("function double(n){ throw 1 }"); 8]);
+        let tiebreak = Scripted::new(vec![solved("function double(n){ throw 1 }"); 8]);
+        let e = Concierge::new(&author)
+            .with_checkers(&checker, &tiebreak)
+            .draft("double", &mut |_| {})
+            .await
+            .unwrap_err();
+        assert_eq!(e.code(), Code::ConciergeNoDraft);
     }
 
     #[tokio::test]

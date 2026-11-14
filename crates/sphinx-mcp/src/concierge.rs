@@ -266,8 +266,16 @@ impl SphinxMcp {
 fn review(saved: &Saved) -> Value {
     let d = &saved.draft;
     let check = if d.differences.is_empty() {
+        let left_out = if d.dropped.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "; {} tests the description did not settle were left out",
+                d.dropped.len()
+            )
+        };
         format!(
-            "a second solver that read only the description agreed with the reference on all {} tests",
+            "a separate solver that read only the description wrote code that passes all {} tests{left_out}",
             d.tests
         )
     } else {
