@@ -9,6 +9,11 @@ const busy = ref(false)
 
 const TGAS = 1_000_000_000_000n
 
+// Wallets pass transactions to their signing window with postMessage, which
+// cannot copy a page's reactive state (a Vue proxy): hand them plain JSON.
+// Every value in a NEAR transaction is plain JSON (amounts are strings).
+const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+
 async function load(network: 'mainnet' | 'testnet'): Promise<NearConnector> {
   if (connector) return connector
   ready ??= (async () => {
@@ -73,7 +78,7 @@ export function useWallet() {
       receiverId: contract,
       actions: [{
         type: 'FunctionCall',
-        params: { methodName: method, args, gas: (tgas * TGAS).toString(), deposit: deposit.toString() }
+        params: { methodName: method, args: plain(args), gas: (tgas * TGAS).toString(), deposit: deposit.toString() }
       }]
     })
     const status = outcome.status as { SuccessValue?: string, Failure?: unknown }
@@ -97,7 +102,7 @@ export function useWallet() {
     const c = await load(net)
     const wallet = await c.wallet()
     const outcomes = await wallet.signAndSendTransactions({
-      transactions: transactions as Parameters<typeof wallet.signAndSendTransactions>[0]['transactions']
+      transactions: plain(transactions) as Parameters<typeof wallet.signAndSendTransactions>[0]['transactions']
     })
     return outcomes.map((o) => {
       const status = o.status as { Failure?: unknown }
