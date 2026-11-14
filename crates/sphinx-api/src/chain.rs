@@ -13,6 +13,9 @@ use std::future::Future;
 pub trait Chain: Send + Sync + 'static {
     /// The escrow contract's account id.
     fn contract(&self) -> &str;
+    /// Marks reused answers stale after an action that may have changed the
+    /// chain. Nothing to do for a reader that reuses nothing.
+    fn expire(&self) {}
     fn config(&self) -> impl Future<Output = Result<Config, SphinxError>> + Send;
     fn jobs(
         &self,

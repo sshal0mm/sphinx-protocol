@@ -26,7 +26,7 @@ A deposit that is short, late or fails is refunded to your NEAR account inside N
 
 ## withdrawing a reward to another chain
 
-On [your account](/me), under "withdraw to another chain", enter the NEAR to withdraw (or press max: your balance less what NEAR locks for your account's storage, 0.05 NEAR for gas and the registration below), choose the chain and the token, and give your address there. Then get a quote. One approval in your wallet sends one transaction to `wrap.near` with three actions:
+On [your account](/account), under "withdraw to another chain", enter the NEAR to withdraw (or press max: your balance less what NEAR locks for your account's storage, 0.05 NEAR for gas and the registration below), choose the chain and the token, and give your address there. Then get a quote. One approval in your wallet sends one transaction to `wrap.near` with three actions:
 
 1. `storage_deposit` registers the deposit address on `wrap.near` (0.00125 NEAR).
 2. `near_deposit` wraps exactly the amount shown.

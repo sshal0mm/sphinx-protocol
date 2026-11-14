@@ -69,7 +69,7 @@ async fn run() -> Result<(), String> {
                 "https://rpc.testnet.fastnear.com"
             },
         ),
-        rpc_key: std::env::var("SPHINX_RPC_KEY").ok().filter(|k| !k.is_empty()),
+        rpc_keys: Arc::new(sphinx_near::RpcKeys::from_env()),
         api_public: env("SPHINX_API_PUBLIC_BASE", &api),
         api,
         keystore,
@@ -99,7 +99,7 @@ async fn run() -> Result<(), String> {
         terms.swap_fee_account.clone(),
         mainnet,
         at.rpc.clone(),
-        at.rpc_key.clone(),
+        at.rpc_keys.clone(),
     ));
     let house = Arc::new(House::new(model, at, dir, terms, caps));
     let checker = house.clone();
@@ -129,7 +129,7 @@ async fn run() -> Result<(), String> {
     // Tests a buyer did not publish are forgotten a week after the job ends.
     let keeper = house.clone();
     tokio::spawn(async move {
-        let mut tick = tokio::time::interval(std::time::Duration::from_secs(600));
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(3600));
         loop {
             tick.tick().await;
             keeper.forget_old_tests().await;

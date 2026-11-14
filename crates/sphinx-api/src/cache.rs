@@ -70,6 +70,22 @@ impl<C: Chain> Cached<C> {
         Self { inner: Arc::new(inner), fresh, stale, store: Arc::default() }
     }
 
+    /// Marks every answer that can change as stale, after an action that
+    /// may have changed the chain (a relayed call, stored code): the next
+    /// reader still gets an answer at once and starts one refresh. Settled
+    /// answers are kept.
+    pub fn expire_all(&self) {
+        let back = self.fresh + Duration::from_millis(1);
+        let mut s = self.store.lock().unwrap_or_else(PoisonError::into_inner);
+        for (key, (at, _)) in &mut s.entries {
+            if !key.starts_with(SETTLED) {
+                if let Some(earlier) = Instant::now().checked_sub(back) {
+                    *at = (*at).min(earlier);
+                }
+            }
+        }
+    }
+
     fn lookup<T: Clone + 'static>(&self, key: &str) -> Hit<T> {
         let s = self.store.lock().unwrap_or_else(PoisonError::into_inner);
         let Some((at, value)) = s.entries.get(key) else { return Hit::Miss };
@@ -131,6 +147,10 @@ impl<C: Chain> Cached<C> {
 impl<C: Chain> Chain for Cached<C> {
     fn contract(&self) -> &str {
         self.inner.contract()
+    }
+
+    fn expire(&self) {
+        self.expire_all();
     }
 
     async fn config(&self) -> Result<Config, SphinxError> {
@@ -239,6 +259,20 @@ impl<C: Chain> Chain for Cached<C> {
 #[allow(clippy::unused_async_trait_impl, reason = "the fake answers at once")]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn expire_keeps_answers_but_makes_them_stale() {
+        let c = Cached::new(Counting::default(), Duration::from_secs(60), Duration::from_secs(600));
+        insert(&c.store, Duration::from_secs(600), "k".into(), Arc::new(1u32));
+        insert(&c.store, Duration::from_secs(600), format!("{SETTLED}k"), Arc::new(2u32));
+        assert!(matches!(c.lookup::<u32>("k"), Hit::Fresh(1)));
+        c.expire_all();
+        assert!(matches!(c.lookup::<u32>("k"), Hit::Stale(1)), "served at once, refreshed after");
+        assert!(
+            matches!(c.lookup::<u32>(&format!("{SETTLED}k")), Hit::Fresh(2)),
+            "settled answers never expire"
+        );
+    }
     use sphinx_protocol::Code;
     use std::sync::atomic::{AtomicU32, Ordering};
 

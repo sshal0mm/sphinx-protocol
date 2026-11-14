@@ -19,11 +19,6 @@ use sphinx_near::near_api::Signer;
 use sphinx_near::Escrow;
 use std::sync::Arc;
 
-/// Long-lived processes have been seen to lose every RPC endpoint at once
-/// while a new process reaches them fine, so after this many failed warm-ups
-/// in a row the API exits (status 75) for its supervisor to restart it.
-const MAX_FAILED_WARMUPS: u32 = 10;
-
 #[tokio::main]
 async fn main() -> std::process::ExitCode {
     let Ok(contract) = std::env::var("SPHINX_CONTRACT") else {
@@ -62,8 +57,8 @@ async fn main() -> std::process::ExitCode {
     let state = Arc::new(AppState {
         chain: sphinx_api::cache::Cached::new(
             escrow,
-            std::time::Duration::from_secs(3),
-            std::time::Duration::from_secs(45),
+            std::time::Duration::from_secs(15),
+            std::time::Duration::from_mins(10),
         ),
         code: CodeStore::new(code_dir.into())
             .with_reader_token(std::env::var("SPHINX_CODE_READER_TOKEN").ok()),
@@ -71,29 +66,9 @@ async fn main() -> std::process::ExitCode {
         relay,
         uids: sphinx_api::uids::UidIndex::default(),
     });
-    // Keeps the cache's common reads within its stale window, so page loads
-    // never wait on the RPC.
-    let warmer = state.clone();
-    tokio::spawn(async move {
-        let mut tick = tokio::time::interval(std::time::Duration::from_secs(30));
-        let mut failed = 0u32;
-        loop {
-            tick.tick().await;
-            match sphinx_api::warm(&warmer).await {
-                Ok(()) => failed = 0,
-                Err(e) => {
-                    failed += 1;
-                    eprintln!("cache warm-up failed ({failed}/{MAX_FAILED_WARMUPS}): {}", e.code());
-                    if failed >= MAX_FAILED_WARMUPS {
-                        eprintln!(
-                            "cannot read the chain; exiting so the supervisor restarts the API"
-                        );
-                        std::process::exit(75);
-                    }
-                }
-            }
-        }
-    });
+    // No background reads: the chain is read when someone asks, answers are
+    // reused for `fresh` and served while refreshing for up to `stale`, and
+    // our own actions (a relayed call, stored code) mark them stale.
     // Uploads nothing on chain refers to are removed once a day old.
     let collector = state.clone();
     tokio::spawn(async move {

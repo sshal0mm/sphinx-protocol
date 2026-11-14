@@ -8,6 +8,8 @@ The relayer starts enclave runs and posts their signed results. It cannot change
 
 ## what it does
 
+It reads the chain when there is a reason to, not on a timer: right after the job API, the describe-a-job server or a connector tells it a submission was relayed, code was stored or a job was posted; every few seconds while it has work and for two minutes after such a nudge; when a grading window it knows of closes; and otherwise once every five minutes, for calls made straight to the contract. It also needs NEAR on hand to pay for each enclave run (about 0.38 NEAR at least); below that, grading waits until it is topped up.
+
 Each pass reads every active job from the chain and does whatever is due:
 
 - a committed job: run the suite check in the enclave

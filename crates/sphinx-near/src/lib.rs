@@ -28,11 +28,87 @@ use std::sync::Arc;
 
 pub use near_api;
 
-/// Which NEAR network and escrow contract to talk to.
+/// Which NEAR network and escrow contract to talk to. With several RPC keys
+/// it holds one network per key and takes them in turn, so the load (and a
+/// provider's usage limit) is spread across the keys.
 #[derive(Clone, Debug)]
 pub struct Escrow {
-    network: NetworkConfig,
+    networks: Arc<Vec<NetworkConfig>>,
+    next: Arc<std::sync::atomic::AtomicUsize>,
     contract: AccountId,
+}
+
+/// The `FastNEAR` RPC keys from the environment: `SPHINX_RPC_KEY` and the
+/// comma-separated `SPHINX_RPC_KEYS`, in that order, without blanks or
+/// repeats. Keys are only ever sent to `FastNEAR` hosts.
+pub fn rpc_keys_from_env() -> Vec<String> {
+    let mut keys: Vec<String> = Vec::new();
+    let one = std::env::var("SPHINX_RPC_KEY").unwrap_or_default();
+    let many = std::env::var("SPHINX_RPC_KEYS").unwrap_or_default();
+    for k in std::iter::once(one.as_str()).chain(many.split(',')) {
+        let k = k.trim();
+        if !k.is_empty() && !keys.iter().any(|x| x == k) {
+            keys.push(k.to_owned());
+        }
+    }
+    keys
+}
+
+/// Tells the relayer something on chain may need it now (a submission
+/// relayed, code stored for one, a job posted), so it reads the chain at once
+/// instead of on a timer. Fire and forget: `SPHINX_RELAYER_NUDGE` (the
+/// relayer's internal `/nudge` URL) unset means no nudge, and a relayer that
+/// does not answer within two seconds is skipped; it still looks on its own,
+/// only later. Needs a running Tokio runtime.
+pub fn nudge_relayer() {
+    let Some(url) = std::env::var("SPHINX_RELAYER_NUDGE").ok().filter(|u| !u.is_empty()) else {
+        return;
+    };
+    if tokio::runtime::Handle::try_current().is_err() {
+        return;
+    }
+    tokio::spawn(async move {
+        let _ = reqwest::Client::new()
+            .post(url)
+            .timeout(std::time::Duration::from_secs(2))
+            .send()
+            .await;
+    });
+}
+
+/// Hands out RPC keys in turn.
+#[derive(Debug, Default)]
+pub struct RpcKeys {
+    keys: Vec<String>,
+    next: std::sync::atomic::AtomicUsize,
+}
+
+impl RpcKeys {
+    pub fn new(keys: Vec<String>) -> Self {
+        Self { keys, next: std::sync::atomic::AtomicUsize::new(0) }
+    }
+
+    /// From [`rpc_keys_from_env`].
+    pub fn from_env() -> Self {
+        Self::new(rpc_keys_from_env())
+    }
+
+    /// The next key, if there are any.
+    pub fn next(&self) -> Option<&str> {
+        if self.keys.is_empty() {
+            return None;
+        }
+        let i = self.next.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % self.keys.len();
+        Some(&self.keys[i])
+    }
+
+    pub fn len(&self) -> usize {
+        self.keys.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.keys.is_empty()
+    }
 }
 
 /// The result of a successful signed call.
@@ -137,7 +213,35 @@ fn network_with(mainnet: bool, urls: Option<&str>, key: Option<&str>) -> Network
 
 impl Escrow {
     pub fn new(network: NetworkConfig, contract: AccountId) -> Self {
-        Self { network, contract }
+        Self::rotating(vec![network], contract)
+    }
+
+    /// One network per RPC key, used in turn.
+    ///
+    /// # Panics
+    /// With no networks.
+    pub fn rotating(networks: Vec<NetworkConfig>, contract: AccountId) -> Self {
+        assert!(!networks.is_empty(), "an escrow needs a network");
+        Self { networks: Arc::new(networks), next: Arc::default(), contract }
+    }
+
+    /// The networks for `mainnet`, one per key from the environment (or one
+    /// without a key).
+    fn from_env(mainnet: bool) -> Vec<NetworkConfig> {
+        let urls = std::env::var("SPHINX_RPC_URLS").ok();
+        let keys = rpc_keys_from_env();
+        let build = |k: Option<&str>| {
+            if mainnet {
+                mainnet_network(urls.as_deref(), k)
+            } else {
+                testnet_network(urls.as_deref(), k)
+            }
+        };
+        if keys.is_empty() {
+            vec![build(None)]
+        } else {
+            keys.iter().map(|k| build(Some(k))).collect()
+        }
     }
 
     /// The public NEAR testnet. RPC endpoints are tried in order, moving to
@@ -145,23 +249,15 @@ impl Escrow {
     /// (comma-separated) when set, otherwise [`TESTNET_RPC`].
     /// `SPHINX_RPC_KEY`, when set, is sent to `FastNEAR` endpoints.
     pub fn testnet(contract: AccountId) -> Self {
-        let urls = std::env::var("SPHINX_RPC_URLS").ok();
-        let key = std::env::var("SPHINX_RPC_KEY").ok();
-        Self::new(testnet_network(urls.as_deref(), key.as_deref()), contract)
+        Self::rotating(Self::from_env(false), contract)
     }
 
     /// The network the contract's own account name says it is on: mainnet
     /// for a `.near` account, testnet otherwise. RPC settings as in
     /// [`Escrow::testnet`].
     pub fn for_contract(contract: AccountId) -> Self {
-        let urls = std::env::var("SPHINX_RPC_URLS").ok();
-        let key = std::env::var("SPHINX_RPC_KEY").ok();
-        let network = if is_mainnet(contract.as_str()) {
-            mainnet_network(urls.as_deref(), key.as_deref())
-        } else {
-            testnet_network(urls.as_deref(), key.as_deref())
-        };
-        Self::new(network, contract)
+        let mainnet = is_mainnet(contract.as_str());
+        Self::rotating(Self::from_env(mainnet), contract)
     }
 
     /// Whether this escrow is on mainnet.
@@ -173,8 +269,11 @@ impl Escrow {
         &self.contract
     }
 
+    /// The network to use for the next request: with several RPC keys,
+    /// each call takes the next one.
     pub fn network(&self) -> &NetworkConfig {
-        &self.network
+        let i = self.next.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % self.networks.len();
+        &self.networks[i]
     }
 
     /// Calls a view method and decodes its JSON result.
@@ -190,7 +289,7 @@ impl Escrow {
         Contract(self.contract.clone())
             .call_function(method, args)
             .read_only::<T>()
-            .fetch_from(&self.network)
+            .fetch_from(self.network())
             .await
             .map(|data| data.data)
             .map_err(|e| decode_failure(method, &e.to_string()))
@@ -216,7 +315,7 @@ impl Escrow {
             .deposit(deposit)
             .gas(gas)
             .with_signer(signer_id, signer)
-            .send_to(&self.network)
+            .send_to(self.network())
             .await
             .map_err(|e| decode_failure(method, &e.to_string()))?;
         outcome_value(method, result)
@@ -335,6 +434,28 @@ mod amount_tests {
 #[cfg(test)]
 mod network_choice {
     use super::*;
+
+    #[test]
+    fn rpc_keys_take_turns() {
+        let keys = RpcKeys::new(vec!["a".into(), "b".into(), "c".into()]);
+        let used: Vec<&str> = (0..6).filter_map(|_| keys.next()).collect();
+        assert_eq!(used, ["a", "b", "c", "a", "b", "c"]);
+        assert_eq!(RpcKeys::new(vec![]).next(), None);
+    }
+
+    #[test]
+    fn an_escrow_uses_its_networks_in_turn() {
+        let contract: AccountId = "escrow.testnet".parse().unwrap();
+        let nets: Vec<NetworkConfig> =
+            ["k1", "k2"].iter().map(|k| testnet_network(None, Some(k))).collect();
+        let e = Escrow::rotating(nets, contract);
+        let key = |n: &NetworkConfig| n.rpc_endpoints[0].bearer_header.clone();
+        let first = key(e.network());
+        let second = key(e.network());
+        let third = key(e.network());
+        assert_ne!(first, second);
+        assert_eq!(first, third);
+    }
 
     #[test]
     fn the_contract_name_picks_the_network() {

@@ -24,6 +24,9 @@
 //! - `GET /newcomer/intents/balance/{account}`: the account's wNEAR, which
 //!   the pay page unwraps first when a swap delivered wNEAR, and the NEAR it
 //!   can withdraw (the withdraw panel's Max).
+//! - `GET /newcomer/tests-stored/{account}/{job_id}`: whether OutLayer's
+//!   keystore holds that job's hidden tests for its buyer, and the deposit
+//!   they hold, so the site only offers the deposit back when there is one.
 //!
 //! Sphinx never holds the money: every deposit address is 1Click's, every
 //! recipient and refund account is the user's own. NEAR Intents has no
@@ -76,7 +79,7 @@ pub struct Intents {
     pub mainnet: bool,
     /// NEAR RPC, and its `FastNEAR` key if any, to read wNEAR balances.
     pub rpc: String,
-    pub rpc_key: Option<String>,
+    pub rpc_keys: Arc<sphinx_near::RpcKeys>,
     http: reqwest::Client,
     starts: Mutex<HashMap<String, (Instant, u32)>>,
 }
@@ -89,7 +92,7 @@ impl Intents {
         fee_account: String,
         mainnet: bool,
         rpc: String,
-        rpc_key: Option<String>,
+        rpc_keys: Arc<sphinx_near::RpcKeys>,
     ) -> Self {
         Self {
             one_click: OneClick::new(base, key),
@@ -97,7 +100,7 @@ impl Intents {
             fee_account,
             mainnet,
             rpc,
-            rpc_key,
+            rpc_keys,
             http: reqwest::Client::new(),
             starts: Mutex::new(HashMap::new()),
         }
@@ -276,7 +279,7 @@ impl Intents {
     async fn rpc_query(&self, params: Value) -> Result<Value, Refusal> {
         let body = json!({ "jsonrpc": "2.0", "id": 1, "method": "query", "params": params });
         let mut req = self.http.post(&self.rpc).json(&body).timeout(Duration::from_secs(15));
-        if let Some(k) = self.rpc_key.as_deref().filter(|_| self.rpc.contains("fastnear")) {
+        if let Some(k) = self.rpc_keys.next().filter(|_| sphinx_near::is_fastnear(&self.rpc)) {
             req = req.bearer_auth(k);
         }
         let v: Value = req
@@ -335,6 +338,44 @@ impl Intents {
             "account": account,
             "wnear_yocto": n.to_string(), "wnear": format_near(n),
             "spendable_yocto": spendable.to_string(), "spendable": format_near(spendable),
+        }))
+    }
+
+    /// Whether OutLayer's keystore holds job `job_id`'s hidden tests for
+    /// `account`, and the storage deposit they hold.
+    ///
+    /// # Errors
+    /// Not an account id, or the RPC could not say.
+    pub async fn tests_stored(&self, account: &str, job_id: u64) -> Result<Value, Refusal> {
+        if account.parse::<sphinx_near::near_api::types::AccountId>().is_err() {
+            return Err(bad("not a NEAR account id"));
+        }
+        let keystore = if self.mainnet { "outlayer.near" } else { "outlayer.testnet" };
+        let args = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            json!({ "account_id": account }).to_string(),
+        );
+        let r = self
+            .rpc_query(json!({ "request_type": "call_function", "finality": "final",
+                               "account_id": keystore, "method_name": "list_user_secrets", "args_base64": args }))
+            .await?;
+        let bytes: Vec<u8> = r["result"]
+            .as_array()
+            .map(|a| {
+                a.iter().filter_map(|b| b.as_u64().and_then(|b| u8::try_from(b).ok())).collect()
+            })
+            .ok_or_else(|| upstream("NEAR RPC could not read the keystore"))?;
+        let entries: Vec<Value> = serde_json::from_slice(&bytes).unwrap_or_default();
+        let profile = sphinx_near::hidden_suite::profile_for_job(job_id);
+        let found = entries.iter().find(|e| e["profile"] == profile.as_str());
+        let deposit: u128 = found
+            .and_then(|e| e["storage_deposit"].as_str())
+            .and_then(|d| d.parse().ok())
+            .unwrap_or(0);
+        Ok(json!({
+            "stored": found.is_some(),
+            "deposit_yocto": deposit.to_string(),
+            "deposit": format_near(deposit),
         }))
     }
 
@@ -401,6 +442,7 @@ pub fn router(intents: Arc<Intents>) -> Router {
         .route("/newcomer/intents/status/{deposit}", get(status))
         .route("/newcomer/intents/submit", post(submit))
         .route("/newcomer/intents/balance/{account}", get(balance))
+        .route("/newcomer/tests-stored/{account}/{job_id}", get(tests_stored))
         .with_state(intents)
 }
 
@@ -438,6 +480,13 @@ async fn balance(
     i.balance(&account).await.map(Json)
 }
 
+async fn tests_stored(
+    State(i): State<Arc<Intents>>,
+    Path((account, job_id)): Path<(String, u64)>,
+) -> Result<Json<Value>, Refusal> {
+    i.tests_stored(&account, job_id).await.map(Json)
+}
+
 async fn submit(
     State(i): State<Arc<Intents>>,
     Json(b): Json<SubmitBody>,
@@ -459,7 +508,7 @@ mod tests {
             "fee.near".into(),
             false,
             "http://127.0.0.1:9".into(),
-            None,
+            Arc::default(),
         );
         assert_eq!(i.mainnet_only().unwrap_err().code, "mainnet_only");
     }

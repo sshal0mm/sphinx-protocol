@@ -63,6 +63,42 @@ pub fn plan(job: &Job, submissions: &[Submission], now_ns: u64) -> Vec<Work> {
     }
 }
 
+/// When this job will next have work that time alone brings (nanoseconds):
+/// a pass waiting on earlier submissions can be settled once their grading
+/// windows close. `None` when only a new action (a submission, a post) can
+/// bring work.
+pub fn next_due(job: &Job, submissions: &[Submission], now_ns: u64) -> Option<u64> {
+    if job.status != JobStatus::Open {
+        return None;
+    }
+    let first = job.first_pass?;
+    let ends: Vec<u64> = submissions
+        .iter()
+        .filter(|s| s.status == SubStatus::Pending && s.sub_id < first)
+        .filter_map(|s| s.submitted_at_ns.parse::<u64>().ok())
+        .map(|t| t.saturating_add(GRADING_WINDOW_NS))
+        .collect();
+    let last = ends.into_iter().max()?;
+    (last > now_ns).then_some(last)
+}
+
+/// How long the relayer sleeps before its next look: right away again while
+/// it is doing work or was just nudged, else until the next time-driven
+/// work, but never longer than `idle` (the safety net for calls made
+/// straight to the contract, which nobody nudges about).
+pub fn next_wait(
+    busy: bool,
+    nudged_recently: bool,
+    due_in: Option<std::time::Duration>,
+    poll: std::time::Duration,
+    idle: std::time::Duration,
+) -> std::time::Duration {
+    if busy || nudged_recently {
+        return poll;
+    }
+    due_in.map_or(idle, |d| d.clamp(poll, idle))
+}
+
 /// Whether a job can have work at all (so its submissions are worth reading).
 pub fn is_active(job: &Job) -> bool {
     matches!(job.status, JobStatus::Committed | JobStatus::Open) || job.pending_count > 0
@@ -77,6 +113,25 @@ pub fn needs_submissions(job: &Job) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_relayer_sleeps_until_there_is_a_reason() {
+        use std::time::Duration;
+        let (poll, idle) = (Duration::from_secs(6), Duration::from_mins(5));
+        // Working or just nudged: look again soon.
+        assert_eq!(next_wait(true, false, None, poll, idle), poll);
+        assert_eq!(next_wait(false, true, None, poll, idle), poll);
+        // Nothing to do: the safety net only.
+        assert_eq!(next_wait(false, false, None, poll, idle), idle);
+        // A grading window closing in a minute: wake then, not before.
+        assert_eq!(
+            next_wait(false, false, Some(Duration::from_mins(1)), poll, idle),
+            Duration::from_mins(1)
+        );
+        // Never sooner than a poll, never later than the safety net.
+        assert_eq!(next_wait(false, false, Some(Duration::ZERO), poll, idle), poll);
+        assert_eq!(next_wait(false, false, Some(Duration::from_hours(3)), poll, idle), idle);
+    }
     use serde_json::json;
 
     fn job(status: &str, pending: u32) -> Job {

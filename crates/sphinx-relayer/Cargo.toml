@@ -16,7 +16,7 @@ path = "src/main.rs"
 sphinx-protocol = { path = "../sphinx-protocol" }
 sphinx-near = { path = "../sphinx-near" }
 sphinx-box = { path = "../sphinx-box" }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "fs"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "fs", "net", "sync", "io-util"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 serde_json.workspace = true
 

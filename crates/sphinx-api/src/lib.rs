@@ -668,6 +668,9 @@ async fn put_code<C: Chain>(
     let client = headers.get(CLIENT_HEADER).and_then(|v| v.to_str().ok()).unwrap_or("direct");
     let hash = s.code.put(&body, client).await?;
     let code_uri = format!("{}/v1/code/{hash}", s.public_base.trim_end_matches('/'));
+    // A submission for this code usually follows within seconds.
+    sphinx_near::nudge_relayer();
+    s.chain.expire();
     Ok((StatusCode::CREATED, Json(StoredCode { code_hash: hash, code_uri })))
 }
 
@@ -1015,7 +1018,11 @@ async fn relay<C: Chain>(
         sphinx_near::relay::send(&relay.escrow, relay.relayer.clone(), relay.signer.clone(), sda)
             .await;
     match sent {
-        Ok(outcome) => Ok(Json(json!({ "tx_hash": outcome.tx_hash, "result": outcome.value }))),
+        Ok(outcome) => {
+            sphinx_near::nudge_relayer();
+            s.chain.expire();
+            Ok(Json(json!({ "tx_hash": outcome.tx_hash, "result": outcome.value })))
+        }
         Err(e) => {
             // Only a failure that reached the chain cost the relay gas.
             if e.context().contains_key("tx_hash") {

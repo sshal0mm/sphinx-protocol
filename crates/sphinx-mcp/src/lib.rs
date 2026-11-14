@@ -1359,6 +1359,9 @@ impl SphinxMcp {
         let out = self.write_unchecked(method, args, deposit_yocto).await;
         if out.is_err() {
             self.release(deposit_yocto);
+        } else if matches!(method, "submit" | "submit_from_balance" | "commit_suite" | "settle") {
+            // Work for the relayer: tell it now rather than on its timer.
+            sphinx_near::nudge_relayer();
         }
         out
     }

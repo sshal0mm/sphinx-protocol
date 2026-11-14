@@ -222,7 +222,8 @@ pub struct Endpoints {
     /// NEAR RPC, to check the buyer's transactions.
     pub rpc: String,
     /// `FastNEAR` API key, sent as a bearer header to `FastNEAR` RPC only.
-    pub rpc_key: Option<String>,
+    /// `FastNEAR` API keys, used in turn (only ever sent to `FastNEAR`).
+    pub rpc_keys: Arc<sphinx_near::RpcKeys>,
     /// The job API, internal address (to store task text).
     pub api: String,
     /// The job API's public address, used in `spec_uri`.
@@ -243,10 +244,14 @@ fn model_down(why: &str) -> bool {
         "NEAR AI Cloud answered 429",
         "NEAR AI Cloud request failed",
         "no drafting model is confirmed",
+        "the reply did not verify",
     ]
     .iter()
     .any(|m| why.contains(m))
 }
+
+/// How long a posted job's progress is reused before it is read again.
+const PROGRESS_FRESH: Duration = Duration::from_secs(15);
 
 /// The house: its model, and the visitors' requests.
 #[allow(missing_debug_implementations, reason = "holds a model client")]
@@ -259,6 +264,9 @@ pub struct House<M: Model> {
     records: Mutex<HashMap<String, Record>>,
     counters: Mutex<Counters>,
     price: Mutex<Option<(f64, Instant)>>,
+    /// Posted jobs' progress as last read, shared by everyone viewing them:
+    /// reused for [`PROGRESS_FRESH`], and for good once the job has ended.
+    progress: Mutex<HashMap<u64, (Instant, Value, bool)>>,
     http: reqwest::Client,
 }
 
@@ -291,6 +299,7 @@ impl<M: Model + Send + Sync + 'static> House<M> {
             records: Mutex::new(records),
             counters: Mutex::new(Counters::default()),
             price: Mutex::new(None),
+            progress: Mutex::new(HashMap::new()),
             http: reqwest::Client::new(),
         }
     }
@@ -952,7 +961,7 @@ impl<M: Model + Send + Sync + 'static> House<M> {
             let reply: Option<Value> = async {
                 let mut req = self.http.post(&self.at.rpc);
                 if let Some(key) =
-                    self.at.rpc_key.as_deref().filter(|_| sphinx_near::is_fastnear(&self.at.rpc))
+                    self.at.rpc_keys.next().filter(|_| sphinx_near::is_fastnear(&self.at.rpc))
                 {
                     req = req.bearer_auth(key);
                 }
@@ -1112,6 +1121,25 @@ impl<M: Model + Send + Sync + 'static> House<M> {
     }
 
     async fn job_progress(&self, job_id: u64) -> Option<Value> {
+        if let Ok(cache) = self.progress.lock() {
+            if let Some((at, value, ended)) = cache.get(&job_id) {
+                if *ended || at.elapsed() < PROGRESS_FRESH {
+                    return Some(value.clone());
+                }
+            }
+        }
+        let value = self.read_job_progress(job_id).await?;
+        let ended = matches!(
+            value["status"].as_str(),
+            Some("Paid" | "Refunded" | "Cancelled" | "Rejected")
+        ) && value["pending"].as_u64() == Some(0);
+        if let Ok(mut cache) = self.progress.lock() {
+            cache.insert(job_id, (Instant::now(), value.clone(), ended));
+        }
+        Some(value)
+    }
+
+    async fn read_job_progress(&self, job_id: u64) -> Option<Value> {
         let job: Job = self
             .at
             .escrow
@@ -1229,19 +1257,23 @@ fn rfc3339(t: SystemTime) -> String {
 pub fn describe(p: &Progress) -> String {
     match p {
         Progress::Writing { round: 1 } => {
-            "Writing the task, a reference solution and the hidden tests".into()
+            "Writing the task and the hidden tests from your words".into()
         }
-        Progress::Writing { round } => format!("Revising the draft (round {round})"),
+        Progress::Writing { round } => {
+            format!("Refining the task and the hidden tests (round {round})")
+        }
         Progress::ReferenceFailed { failures } => {
-            format!("The reference solution failed {failures} of its own tests; fixing it")
+            format!("Fixing {failures} expected answers that did not hold up")
         }
-        Progress::SecondOpinion => "A second solver is trying the task from the text alone".into(),
-        Progress::ThirdOpinion => "A third solver is breaking the ties".into(),
+        Progress::SecondOpinion => {
+            "Checking the task text says exactly what the tests expect".into()
+        }
+        Progress::ThirdOpinion => "Settling unclear cases with one more check".into(),
         Progress::Compared { agreed, total } => {
-            format!("The second solver matched the reference on {agreed} of {total} tests")
+            format!("The task text led to the expected answer on {agreed} of {total} tests")
         }
         Progress::Reviewing { round, differences } => {
-            format!("Settling {differences} differences between the two (round {round})")
+            format!("Making {differences} unclear cases in the task text precise (round {round})")
         }
     }
 }
@@ -1421,7 +1453,10 @@ async fn paid<M: Model + Send + Sync + 'static>(
     Json(body): Json<PaidBody>,
 ) -> Result<Json<Value>, Refusal> {
     check_id(&id)?;
-    house.paid(&id, &body.post_tx, &body.fee_tx).await.map(Json)
+    let out = house.paid(&id, &body.post_tx, &body.fee_tx).await?;
+    // A posted job's suite is committed next; the relayer checks it.
+    sphinx_near::nudge_relayer();
+    Ok(Json(out))
 }
 
 async fn store_again<M: Model + Send + Sync + 'static>(
@@ -1439,6 +1474,8 @@ async fn stored<M: Model + Send + Sync + 'static>(
 ) -> Result<Json<Value>, Refusal> {
     check_id(&id)?;
     let record = house.stored(&id, &body.commit_tx, &body.store_tx).await?;
+    // The suite is committed and stored: the enclave can check it now.
+    sphinx_near::nudge_relayer();
     Ok(Json(json!({ "id": record.id, "job_id": record.job_id })))
 }
 

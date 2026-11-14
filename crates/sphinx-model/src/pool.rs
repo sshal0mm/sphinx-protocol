@@ -196,9 +196,12 @@ impl Pool {
 
 /// An error that says the model (or this key) cannot answer now, not that
 /// the request was wrong: a server error, a rate limit, a dropped
-/// connection, or a key refused (another key may still work).
+/// connection, a key refused (another key may still work), or a reply whose
+/// signature could not be fetched or checked. An unverified reply is never
+/// used; another model's verified reply is.
 fn is_outage(e: &str) -> bool {
-    e.starts_with("NEAR AI Cloud answered 5")
+    e.starts_with("the reply did not verify")
+        || e.starts_with("NEAR AI Cloud answered 5")
         || e.starts_with("NEAR AI Cloud answered 429")
         || e.starts_with("NEAR AI Cloud answered 401")
         || e.starts_with("NEAR AI Cloud answered 402")
@@ -273,7 +276,7 @@ mod tests {
         assert!(is_outage("NEAR AI Cloud request failed: connection reset"));
         assert!(is_outage("NEAR AI Cloud answered 402 Payment Required: no credits"));
         assert!(!is_outage("NEAR AI Cloud answered 400 Bad Request: bad field"));
-        assert!(!is_outage("the reply did not verify, so it was not used: bad signature"));
+        assert!(is_outage("the reply did not verify, so it was not used: the reply's signature could not be fetched: 404"));
     }
 
     #[test]

@@ -110,6 +110,20 @@ stops grading: pending bonds become reclaimable after the grading window and
 the reward is refundable once the deadline and the grading window have
 passed, so no funds are stuck.
 
+## Reading the chain
+
+Nothing reads the chain on a timer while nothing happens. The relayer looks
+when it is nudged (the job API, the describe-a-job server and the connector
+servers send `POST /nudge` after they relay a submission, store code or see a
+job posted), every few seconds while it has work and for two minutes after a
+nudge, when a grading window it knows of closes, and otherwise once every five
+minutes for calls made straight to the contract. The job API reads on request
+and reuses answers (fresh for 15 seconds, served while refreshing for up to 10
+minutes, settled results kept for good), and marks them stale when it relays a
+call or stores code. The describe-a-job server reuses a posted job's progress
+for everyone viewing it, for 15 seconds, and for good once the job has ended.
+Several `FastNEAR` keys (`SPHINX_RPC_KEYS`) are used in turn.
+
 ## Gas
 
 Users can send their own signed calls through the job API as NEP-366

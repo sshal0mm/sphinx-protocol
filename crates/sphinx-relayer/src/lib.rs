@@ -118,7 +118,17 @@ impl Relayer {
     /// # Errors
     /// `SPHINX_E_RELAY_RPC_FAILED` on view failures.
     pub async fn pending_work(&self) -> Result<Vec<Work>, SphinxError> {
+        self.pending_work_and_due().await.map(|(work, _)| work)
+    }
+
+    /// The work to do now, and when time alone next brings work (the
+    /// earliest grading window that will close, in nanoseconds), if ever.
+    ///
+    /// # Errors
+    /// `SPHINX_E_RELAY_RPC_FAILED` on view failures.
+    pub async fn pending_work_and_due(&self) -> Result<(Vec<Work>, Option<u64>), SphinxError> {
         let mut work = Vec::new();
+        let mut due: Option<u64> = None;
         let mut from = 0u64;
         loop {
             let jobs: Vec<Job> = self
@@ -132,14 +142,18 @@ impl Relayer {
                 } else {
                     Vec::new()
                 };
-                work.extend(plan::plan(job, &subs, now_ns()));
+                let now = now_ns();
+                work.extend(plan::plan(job, &subs, now));
+                if let Some(at) = plan::next_due(job, &subs, now) {
+                    due = Some(due.map_or(at, |d| d.min(at)));
+                }
             }
             if n < PAGE as usize {
                 break;
             }
             from += u64::from(PAGE);
         }
-        Ok(work)
+        Ok((work, due))
     }
 
     /// Every submission of a job, read page by page.

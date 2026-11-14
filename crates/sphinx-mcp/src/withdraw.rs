@@ -132,7 +132,7 @@ fn withdraw_link(
             .collect()
     };
     format!(
-        "{}/me#withdraw?network=mainnet&account={}&near={}&chain={}&token={}&to={}",
+        "{}/account#withdraw?network=mainnet&account={}&near={}&chain={}&token={}&to={}",
         site.trim_end_matches('/'),
         q(account),
         q(near),
@@ -327,7 +327,7 @@ mod tests {
         let l = withdraw_link("https://s.dev/", "a.near", "1.5", "base", "USDC", "0xAb&c=1");
         assert_eq!(
             l,
-            "https://s.dev/me#withdraw?network=mainnet&account=a.near&near=1.5&chain=base&token=USDC&to=0xAb%26c%3D1"
+            "https://s.dev/account#withdraw?network=mainnet&account=a.near&near=1.5&chain=base&token=USDC&to=0xAb%26c%3D1"
         );
     }
 

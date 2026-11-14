@@ -3,6 +3,14 @@
 //! Environment (see `.env.example`): `SPHINX_CONTRACT`, `SPHINX_RELAYER_ACCOUNT`,
 //! `SPHINX_RELAYER_KEY` (`ed25519:...`), `SPHINX_GRADER_URL`, `SPHINX_GRADER_SHA256`,
 //! optional `SPHINX_POLL_SECS` (default 6). `--once` runs a single pass.
+//!
+//! The relayer reads the chain when there is a reason to: right after a
+//! nudge (`POST /nudge` on `SPHINX_NUDGE_ADDR`, which the job API, the
+//! describe-a-job server and the connector servers send when they relay a
+//! submission, store code or see a job posted), every `SPHINX_POLL_SECS`
+//! while it has work or for two minutes after a nudge, when a grading window
+//! it knows of closes, and otherwise once every `SPHINX_IDLE_SECS` (default
+//! 300) for calls made straight to the contract, which nobody nudges about.
 //! Submission code is read by hash from the job API at `SPHINX_API` (default
 //! `http://127.0.0.1:8787`). `SPHINX_RELAYER_REPO_ROOT` lets `repo:` code URIs
 //! resolve inside that directory, for local demos only.
@@ -14,7 +22,49 @@ use sphinx_near::Escrow;
 use sphinx_protocol::Retry;
 use sphinx_relayer::{CodeSource, Outcome, Relayer};
 use std::collections::{HashMap, HashSet};
-use std::time::Duration;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::Notify;
+
+/// How long after a nudge the relayer keeps looking every poll, so a
+/// transaction that lands a moment after the nudge is still seen at once.
+const NUDGE_WINDOW: Duration = Duration::from_mins(2);
+
+/// Listens for `POST /nudge` and wakes the relayer. Anything else is a 404.
+/// Internal only: the compose network publishes no port.
+async fn listen_for_nudges(addr: String, wake: Arc<Notify>) {
+    let listener = match tokio::net::TcpListener::bind(&addr).await {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("nudges off: cannot listen on {addr}: {e}");
+            return;
+        }
+    };
+    eprintln!("listening for nudges on {addr}");
+    loop {
+        let Ok((mut socket, _)) = listener.accept().await else { continue };
+        let wake = wake.clone();
+        tokio::spawn(async move {
+            let mut buf = [0u8; 512];
+            let n = tokio::time::timeout(Duration::from_secs(2), socket.read(&mut buf))
+                .await
+                .ok()
+                .and_then(Result::ok)
+                .unwrap_or(0);
+            let nudge = buf[..n].starts_with(b"POST /nudge");
+            if nudge {
+                wake.notify_one();
+            }
+            let reply: &[u8] = if nudge {
+                b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            } else {
+                b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            };
+            let _ = socket.write_all(reply).await;
+        });
+    }
+}
 
 /// Attempts per unit of work before the relayer stops retrying it; the
 /// agent's bond then becomes reclaimable after the grading window.
@@ -83,6 +133,7 @@ fn build() -> Result<Relayer, String> {
 }
 
 #[tokio::main]
+#[allow(clippy::too_many_lines, reason = "one loop that reads, works and waits")]
 async fn main() -> std::process::ExitCode {
     let relayer = match build() {
         Ok(r) => r,
@@ -97,13 +148,26 @@ async fn main() -> std::process::ExitCode {
     );
     let mut attempts: HashMap<(u64, Option<u32>), u32> = HashMap::new();
     let mut transient: HashMap<(u64, Option<u32>), u32> = HashMap::new();
-    let mut set_aside: HashMap<(u64, Option<u32>), std::time::Instant> = HashMap::new();
+    let mut set_aside: HashMap<(u64, Option<u32>), Instant> = HashMap::new();
     // Work waiting on someone else (a buyer who has not stored the suite yet); logged once.
     let mut waiting: HashSet<(u64, Option<u32>)> = HashSet::new();
     eprintln!("sphinx-relayer: {} for {}", relayer.account, relayer.escrow.contract_id());
+    let idle = Duration::from_secs(
+        std::env::var("SPHINX_IDLE_SECS").ok().and_then(|s| s.parse().ok()).unwrap_or(300),
+    );
+    let wake = Arc::new(Notify::new());
+    if let Ok(addr) = std::env::var("SPHINX_NUDGE_ADDR") {
+        tokio::spawn(listen_for_nudges(addr, wake.clone()));
+    }
+    // A fresh start looks closely for a while, as after a nudge.
+    let mut nudged_at = Some(Instant::now());
     let mut failed_reads = 0u32;
     loop {
-        match relayer.pending_work().await {
+        // Whether this pass did something that may lead to more work soon
+        // (work waiting on someone else, such as a top-up, does not).
+        let mut busy = false;
+        let mut due_ns: Option<u64> = None;
+        match relayer.pending_work_and_due().await {
             Err(e) => {
                 failed_reads += 1;
                 eprintln!("read failed ({failed_reads}/{MAX_FAILED_READS}): {}", e.render_panic());
@@ -114,8 +178,9 @@ async fn main() -> std::process::ExitCode {
                     return std::process::ExitCode::from(75);
                 }
             }
-            Ok(work) => {
+            Ok((work, due)) => {
                 failed_reads = 0;
+                due_ns = due;
                 for w in work {
                     if set_aside.get(&w.key()).is_some_and(|at| at.elapsed() >= TRANSIENT_COOL_OFF)
                     {
@@ -128,7 +193,7 @@ async fn main() -> std::process::ExitCode {
                         continue;
                     }
                     if *hiccups >= MAX_TRANSIENT {
-                        set_aside.entry(w.key()).or_insert_with(std::time::Instant::now);
+                        set_aside.entry(w.key()).or_insert_with(Instant::now);
                         continue;
                     }
                     *tries += 1;
@@ -136,6 +201,7 @@ async fn main() -> std::process::ExitCode {
                     else {
                         *tries -= 1;
                         *hiccups += 1;
+                        busy = true;
                         eprintln!(
                             "failed  {w:?}: took longer than {WORK_TIMEOUT:?}; retrying later"
                         );
@@ -143,6 +209,7 @@ async fn main() -> std::process::ExitCode {
                     };
                     match result {
                         Ok(Outcome::Posted { tx_hash, summary }) => {
+                            busy = true;
                             eprintln!("posted  {summary}  tx {tx_hash}");
                         }
                         Ok(Outcome::AlreadyDone) => eprintln!("skipped {w:?}: already recorded"),
@@ -164,15 +231,19 @@ async fn main() -> std::process::ExitCode {
                         Err(e) if e.retry_class() == Retry::Transient => {
                             *tries -= 1;
                             *hiccups += 1;
+                            busy = true;
                             eprintln!(
                                 "failed  {w:?} (transient {hiccups}/{MAX_TRANSIENT}): {}",
                                 e.render_panic()
                             );
                         }
-                        Err(e) => eprintln!(
-                            "failed  {w:?} (attempt {tries}/{MAX_ATTEMPTS}): {}",
-                            e.render_panic()
-                        ),
+                        Err(e) => {
+                            busy = true;
+                            eprintln!(
+                                "failed  {w:?} (attempt {tries}/{MAX_ATTEMPTS}): {}",
+                                e.render_panic()
+                            );
+                        }
                     }
                 }
             }
@@ -180,6 +251,15 @@ async fn main() -> std::process::ExitCode {
         if once {
             return std::process::ExitCode::SUCCESS;
         }
-        tokio::time::sleep(poll).await;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| u64::try_from(d.as_nanos()).unwrap_or(u64::MAX));
+        let due_in = due_ns.map(|at| Duration::from_nanos(at.saturating_sub(now)));
+        let recent = nudged_at.is_some_and(|at| at.elapsed() < NUDGE_WINDOW);
+        let wait = sphinx_relayer::plan::next_wait(busy, recent, due_in, poll, idle);
+        tokio::select! {
+            () = tokio::time::sleep(wait) => {}
+            () = wake.notified() => nudged_at = Some(Instant::now()),
+        }
     }
 }
