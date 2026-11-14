@@ -28,11 +28,12 @@ A deposit that is short, late or fails is refunded to your NEAR account inside N
 
 ## withdrawing a reward to another chain
 
-On [your account](/account), under "withdraw to another chain", enter the NEAR to withdraw (or press max: your balance less what NEAR locks for your account's storage, 0.05 NEAR for gas and the registration below), choose the chain and the token, and give your address there. Then get a quote. One approval in your wallet sends one transaction to `wrap.near` with three actions:
+On [your account](/account), under "withdraw to another chain", enter the NEAR to withdraw (or press max: your balance less what NEAR locks for your account's storage, 0.05 NEAR for gas and the two registrations below), choose the chain and the token, and give your address there. Then get a quote. One approval in your wallet sends one transaction to `wrap.near` with four actions, which succeed or fail together:
 
-1. `storage_deposit` registers the deposit address on `wrap.near` (0.00125 NEAR).
-2. `near_deposit` wraps exactly the amount shown.
-3. `ft_transfer` sends exactly that amount of wNEAR to the deposit address.
+1. `storage_deposit` registers your own account on `wrap.near` (0.00125 NEAR, returned in full if you are already registered), so wrapping is never charged for it.
+2. `storage_deposit` registers the deposit address the same way.
+3. `near_deposit` wraps exactly the amount shown.
+4. `ft_transfer` sends exactly that amount of wNEAR to the deposit address.
 
 The page refuses to sign anything else. The page tells 1Click about the deposit, then tracks the swap until the tokens arrive. A swap that fails comes back to your account as wNEAR.
 
@@ -41,14 +42,14 @@ The page refuses to sign anything else. The page tells 1Click about the deposit,
 An MCP server running with your own key (not a hosted connector, whose key can call only the escrow) offers `sphinx_withdraw`:
 
 1. `quote` with `near`, `chain`, `token` and `recipient` (your own address there) shows what arrives and gives the 1Click deposit address. Nothing is signed.
-2. `send` with that `deposit_address` and `confirm: true`, only after you agreed, signs the same three-action transaction. It accepts only an address that server quoted in the last 30 minutes, so text an assistant reads cannot redirect the money, and the amount counts against the server's spending cap.
+2. `send` with that `deposit_address` and `confirm: true`, only after you agreed, signs the same four-action transaction. It accepts only an address that server quoted in the last 30 minutes, so text an assistant reads cannot redirect the money, and the amount counts against the server's spending cap.
 3. `status` with the `deposit_address` follows the swap until it lands.
 
 Set `SPHINX_ONE_CLICK_KEY` to use a 1Click partner key. The MCP server adds no Sphinx fee.
 
 ## gas
 
-Sphinx pays no gas for a swap and never runs one. When paying from another chain, your deposit is an ordinary token transfer on that chain, so you pay its gas (or your exchange's withdrawal fee covers it); NEAR Intents' solvers pay the rest, and that is already in the quoted amount. A withdrawal costs about 0.001 NEAR in gas plus the 0.00125 NEAR registration, and the gas on the destination chain is taken from the swap.
+Sphinx pays no gas for a swap and never runs one. When paying from another chain, your deposit is an ordinary token transfer on that chain, so you pay its gas (or your exchange's withdrawal fee covers it); NEAR Intents' solvers pay the rest, and that is already in the quoted amount. A withdrawal costs about 0.001 NEAR in gas plus up to two 0.00125 NEAR registrations (one is refunded if you are already registered), and the gas on the destination chain is taken from the swap.
 
 ## fees
 

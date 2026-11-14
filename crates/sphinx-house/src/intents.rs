@@ -44,7 +44,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use sphinx_near::intents::{
     address_ok, chain, format_units, fund_request, mainnet_account, swap_amount, withdraw_request,
-    withdraw_wallet_transactions, Failure, OneClick, CHAINS, TOKENS, WRAP, WRAP_STORAGE_YOCTO,
+    withdraw_wallet_transactions, Failure, OneClick, CHAINS, TOKENS, WITHDRAW_EXTRA_YOCTO, WRAP,
 };
 
 use crate::{bad, client, format_near, rfc3339, upstream, Refusal};
@@ -284,7 +284,7 @@ impl Intents {
             "amount_out_usd": q["amountOutUsd"],
             "seconds": q["timeEstimate"], "deadline": q["deadline"],
             "app_fee_bps": self.fee_bps, "partner_fee": !self.one_click.has_key(),
-            "transactions": withdraw_wallet_transactions(&deposit, near),
+            "transactions": withdraw_wallet_transactions(&b.account, &deposit, near),
         }))
     }
 
@@ -330,8 +330,8 @@ impl Intents {
     }
 
     /// The NEAR `account` can withdraw: its balance less what NEAR locks
-    /// for its storage, room for gas, and the deposit address's one-time
-    /// `wrap.near` registration.
+    /// for its storage, room for gas, and up to two `wrap.near`
+    /// registrations (the sender's and the deposit address's).
     async fn spendable(&self, account: &str) -> Result<u128, Refusal> {
         let a = self
             .rpc_query(json!({ "request_type": "view_account", "finality": "final", "account_id": account }))
@@ -341,7 +341,7 @@ impl Intents {
         Ok(amount
             .saturating_sub(storage)
             .saturating_sub(GAS_ROOM)
-            .saturating_sub(WRAP_STORAGE_YOCTO))
+            .saturating_sub(WITHDRAW_EXTRA_YOCTO))
     }
 
     /// The wNEAR `account` holds on `wrap.near` and the NEAR it can cash

@@ -84,20 +84,24 @@ export function checkStore(txs: WalletTx[], want: { contract: string, keystore: 
 export const WRAP_REGISTRATION = 1_250_000_000_000_000_000_000n
 
 /**
- * Withdrawing to another chain: one transaction to `wrap.near` with three
- * actions, registering the 1Click deposit address, wrapping exactly the
- * quoted NEAR, and sending exactly that much wNEAR to the deposit address.
+ * Withdrawing to another chain: one transaction to `wrap.near` with four
+ * actions, which succeed or fail together: register the user's own account
+ * (so wrapping is never charged for it), register the 1Click deposit
+ * address, wrap exactly the quoted NEAR, and send exactly that much wNEAR to
+ * the deposit address.
  */
-export function checkWithdrawal(txs: WalletTx[], want: { depositAddress: string, near: bigint }) {
+export function checkWithdrawal(txs: WalletTx[], want: { account: string, depositAddress: string, near: bigint }) {
   const [tx, ...rest] = txs
   const a = (tx?.actions ?? []) as Action[]
-  const ok = tx && rest.length === 0 && tx.receiverId === 'wrap.near' && a.length === 3
+  const registers = (x: Action | undefined, who: string) => x?.params.methodName === 'storage_deposit'
+    && x.params.args?.account_id === who
+    && amount(x.params.deposit) >= 0n && amount(x.params.deposit) <= WRAP_REGISTRATION
+  const ok = tx && rest.length === 0 && tx.receiverId === 'wrap.near' && a.length === 4
     && a.every(x => x.type === 'FunctionCall')
-    && a[0]!.params.methodName === 'storage_deposit' && a[0]!.params.args?.account_id === want.depositAddress
-    && amount(a[0]!.params.deposit) >= 0n && amount(a[0]!.params.deposit) <= WRAP_REGISTRATION
-    && a[1]!.params.methodName === 'near_deposit' && amount(a[1]!.params.deposit) === want.near
-    && a[2]!.params.methodName === 'ft_transfer' && a[2]!.params.args?.receiver_id === want.depositAddress
-    && amount(a[2]!.params.args?.amount) === want.near && a[2]!.params.deposit === '1'
+    && registers(a[0], want.account) && registers(a[1], want.depositAddress)
+    && a[2]!.params.methodName === 'near_deposit' && amount(a[2]!.params.deposit) === want.near
+    && a[3]!.params.methodName === 'ft_transfer' && a[3]!.params.args?.receiver_id === want.depositAddress
+    && amount(a[3]!.params.args?.amount) === want.near && a[3]!.params.deposit === '1'
   if (!ok) throw refused()
 }
 

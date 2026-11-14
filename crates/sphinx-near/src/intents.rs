@@ -348,11 +348,29 @@ pub fn fund_request(
 
 const TGAS: u64 = 1_000_000_000_000;
 
-/// The three calls of a withdrawal, as (method, args, gas, deposit): register
-/// the deposit address on `wrap.near`, wrap exactly `near`, and send exactly
-/// that much wNEAR to the deposit address.
-pub fn withdraw_calls(deposit: &str, near: u128) -> [(&'static str, Value, u64, u128); 3] {
+/// The four calls of a withdrawal, as (method, args, gas, deposit), all in
+/// one transaction from `sender` to `wrap.near`, so they succeed or fail
+/// together:
+///
+/// 1. register `sender` on `wrap.near`. An unregistered account would
+///    otherwise have the registration taken out of the NEAR it wraps and
+///    hold too little wNEAR for step 4; a registered one gets the deposit
+///    back in full.
+/// 2. register the deposit address the same way.
+/// 3. wrap exactly `near`.
+/// 4. send exactly that much wNEAR to the deposit address.
+pub fn withdraw_calls(
+    sender: &str,
+    deposit: &str,
+    near: u128,
+) -> [(&'static str, Value, u64, u128); 4] {
     [
+        (
+            "storage_deposit",
+            json!({ "account_id": sender, "registration_only": true }),
+            10 * TGAS,
+            WRAP_STORAGE_YOCTO,
+        ),
         (
             "storage_deposit",
             json!({ "account_id": deposit, "registration_only": true }),
@@ -369,9 +387,13 @@ pub fn withdraw_calls(deposit: &str, near: u128) -> [(&'static str, Value, u64, 
     ]
 }
 
+/// Most a withdrawal holds back beyond the amount: two registrations (one
+/// is refunded when the sender is already registered).
+pub const WITHDRAW_EXTRA_YOCTO: u128 = 2 * WRAP_STORAGE_YOCTO;
+
 /// The same calls in the shape a browser wallet signs.
-pub fn withdraw_wallet_transactions(deposit: &str, near: u128) -> Value {
-    let actions: Vec<Value> = withdraw_calls(deposit, near)
+pub fn withdraw_wallet_transactions(sender: &str, deposit: &str, near: u128) -> Value {
+    let actions: Vec<Value> = withdraw_calls(sender, deposit, near)
         .into_iter()
         .map(|(method, args, gas, deposit)| {
             json!({ "type": "FunctionCall", "params": {
@@ -395,8 +417,9 @@ pub async fn send_withdrawal(
     near: u128,
 ) -> Result<String, String> {
     let wrap: AccountId = WRAP.parse().map_err(|_| "wrap.near is not an account id".to_owned())?;
+    let sender = account.to_string();
     let mut tx = Transaction::construct(account, wrap);
-    for (method, args, gas, attached) in withdraw_calls(deposit, near) {
+    for (method, args, gas, attached) in withdraw_calls(&sender, deposit, near) {
         tx = tx.add_action(Action::FunctionCall(Box::new(FunctionCallAction {
             method_name: method.into(),
             args: args.to_string().into_bytes(),
@@ -441,16 +464,18 @@ mod tests {
     #[test]
     fn a_withdraw_sends_exactly_the_amount_to_the_deposit_address() {
         let dep = "d6".repeat(32);
-        let txs = withdraw_wallet_transactions(&dep, YOCTO / 2);
+        let txs = withdraw_wallet_transactions("alice.near", &dep, YOCTO / 2);
         let tx = &txs[0];
         assert_eq!(tx["receiverId"], "wrap.near");
         let a = tx["actions"].as_array().unwrap();
-        assert_eq!(a.len(), 3);
-        assert_eq!(a[0]["params"]["args"]["account_id"], dep);
-        assert_eq!(a[1]["params"]["deposit"], (YOCTO / 2).to_string());
-        assert_eq!(a[2]["params"]["args"]["receiver_id"], dep);
-        assert_eq!(a[2]["params"]["args"]["amount"], (YOCTO / 2).to_string());
-        assert_eq!(a[2]["params"]["deposit"], "1");
+        assert_eq!(a.len(), 4);
+        // The sender is registered first, so wrapping is never charged for it.
+        assert_eq!(a[0]["params"]["args"]["account_id"], "alice.near");
+        assert_eq!(a[1]["params"]["args"]["account_id"], dep);
+        assert_eq!(a[2]["params"]["deposit"], (YOCTO / 2).to_string());
+        assert_eq!(a[3]["params"]["args"]["receiver_id"], dep);
+        assert_eq!(a[3]["params"]["args"]["amount"], (YOCTO / 2).to_string());
+        assert_eq!(a[3]["params"]["deposit"], "1");
     }
 
     #[test]

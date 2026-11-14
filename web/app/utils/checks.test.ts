@@ -59,10 +59,11 @@ describe('checkStore', () => {
 
 describe('checkWithdrawal', () => {
   const dep = 'd6'.repeat(32)
-  const want = { depositAddress: dep, near: N / 2n }
+  const want = { account: 'alice.near', depositAddress: dep, near: N / 2n }
   const good = (): WalletTx[] => [{
     receiverId: 'wrap.near',
     actions: [
+      call('storage_deposit', { account_id: 'alice.near', registration_only: true }, '1250000000000000000000'),
       call('storage_deposit', { account_id: dep, registration_only: true }, '1250000000000000000000'),
       call('near_deposit', {}, (N / 2n).toString()),
       call('ft_transfer', { receiver_id: dep, amount: (N / 2n).toString() }, '1')
@@ -71,16 +72,19 @@ describe('checkWithdrawal', () => {
   it('accepts exactly the quoted withdrawal', () => {
     expect(() => checkWithdrawal(good(), want)).not.toThrow()
   })
-  it('refuses another recipient, a bigger amount, or another contract', () => {
+  it('refuses another recipient, a bigger amount, another contract, or a registration for someone else', () => {
     const elsewhere = good()
-    ;(elsewhere[0]!.actions[2] as { params: { args: { receiver_id: string } } }).params.args.receiver_id = 'thief.near'
+    ;(elsewhere[0]!.actions[3] as { params: { args: { receiver_id: string } } }).params.args.receiver_id = 'thief.near'
     expect(() => checkWithdrawal(elsewhere, want)).toThrow()
     const more = good()
-    ;(more[0]!.actions[1] as { params: { deposit: string } }).params.deposit = N.toString()
+    ;(more[0]!.actions[2] as { params: { deposit: string } }).params.deposit = N.toString()
     expect(() => checkWithdrawal(more, want)).toThrow()
     const other = good()
     other[0]!.receiverId = 'evil.near'
     expect(() => checkWithdrawal(other, want)).toThrow()
+    const someone = good()
+    ;(someone[0]!.actions[0] as { params: { args: { account_id: string } } }).params.args.account_id = 'bob.near'
+    expect(() => checkWithdrawal(someone, want)).toThrow()
   })
 })
 

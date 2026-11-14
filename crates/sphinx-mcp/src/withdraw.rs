@@ -26,7 +26,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use sphinx_near::intents::{
     address_ok, chain, format_units, mainnet_account, send_withdrawal, swap_amount,
-    withdraw_request, Failure, OneClick, WRAP_STORAGE_YOCTO,
+    withdraw_request, Failure, OneClick, WITHDRAW_EXTRA_YOCTO,
 };
 use sphinx_protocol::{Code, SphinxError};
 
@@ -243,7 +243,7 @@ impl SphinxMcp {
         let summary = json!({
             "from": account,
             "near": sphinx_near::format_near(near),
-            "plus_one_time_registration_near": sphinx_near::format_near(WRAP_STORAGE_YOCTO),
+            "plus_registration_up_to_near": sphinx_near::format_near(WITHDRAW_EXTRA_YOCTO),
             "receive_about": format!("{} {token}", q["amountOutFormatted"].as_str().unwrap_or("?")),
             "receive_at_least": format!("{} {token}", format_units(q["minAmountOut"].as_str(), decimals).unwrap_or_default()),
             "on": chain.name,
@@ -290,7 +290,7 @@ impl SphinxMcp {
             .ok_or_else(|| {
                 usage("only a deposit address quoted by this server in the last 30 minutes can be sent to; ask for a new quote")
             })?;
-        let spend = quoted.near + WRAP_STORAGE_YOCTO;
+        let spend = quoted.near + WITHDRAW_EXTRA_YOCTO;
         self.reserve(spend)?;
         let sent = send_withdrawal(
             self.settings.escrow.network(),
