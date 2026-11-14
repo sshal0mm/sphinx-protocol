@@ -550,7 +550,9 @@ impl<M: Model + Send + Sync + 'static> House<M> {
     /// Not a drafted request, or a reward outside 0.1 to 100 NEAR.
     pub fn set_reward(&self, id: &str, reward_near: &str) -> Result<Record, Refusal> {
         let record = self.get(id)?;
-        if record.stage != Stage::Drafted {
+        // Until the fee has gone through nothing is committed: a post that
+        // was cancelled or never sent can be tried again at another price.
+        if record.stage != Stage::Drafted && record.stage != Stage::Paying {
             return Err(wrong_stage("the reward can be changed until you pay"));
         }
         let reward =
@@ -570,7 +572,7 @@ impl<M: Model + Send + Sync + 'static> House<M> {
     /// Not a drafted request, or outside 1 hour to 30 days.
     pub fn set_deadline(&self, id: &str, hours: u32) -> Result<Record, Refusal> {
         let record = self.get(id)?;
-        if record.stage != Stage::Drafted {
+        if record.stage != Stage::Drafted && record.stage != Stage::Paying {
             return Err(wrong_stage("the deadline can be changed until you pay"));
         }
         if !(1..=Self::MAX_DEADLINE_HOURS).contains(&hours) {
